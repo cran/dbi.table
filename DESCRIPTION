@@ -1,11 +1,11 @@
 Package: dbi.table
 Type: Package
 Title: Database Queries Using 'data.table' Syntax
-Version: 1.0.1
-Depends: data.table
+Version: 1.0.3
+Depends: R (>= 3.6.0)
 Imports: DBI, bit64, dbplyr, methods, rlang, stringi, utils
-Suggests: R.utils, RSQLite, duckdb, testthat (>= 3.0.0), knitr,
-        rmarkdown
+Suggests: RMariaDB, RPostgres, RSQLite, data.table, duckdb, testthat
+        (>= 3.0.0), knitr, rmarkdown
 Description: 
   Query database tables over a 'DBI' connection using 'data.table' syntax.
   Attach database schemas to the search path. Automatically merge using foreign
@@ -19,12 +19,18 @@ Authors@R: c(
   person(given = c("Kjell", "P."),
          family = "Konis",
          role = c("aut", "cre"),
-         email = "kjellk@gmail.com"))
+         email = "kjellk@gmail.com"),
+  person(given  = "Luis",
+         family = "Rocha",
+         role = "ctb",
+         comment = "Chinook Database - see example_files/LICENSE")
+  )
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2
 NeedsCompilation: no
-Packaged: 2024-12-09 13:46:57 UTC; kjellk
-Author: Kjell P. Konis [aut, cre]
+Packaged: 2025-02-03 02:40:39 UTC; kjellk
+Author: Kjell P. Konis [aut, cre],
+  Luis Rocha [ctb] (Chinook Database - see example_files/LICENSE)
 Maintainer: Kjell P. Konis <kjellk@gmail.com>
 Repository: CRAN
-Date/Publication: 2024-12-10 21:30:05 UTC
+Date/Publication: 2025-02-04 03:30:02 UTC

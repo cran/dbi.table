@@ -58,7 +58,7 @@ preprocess_by <- function(e, dbi_table, enclos, single.ok = FALSE) {
 
 
 preprocess_common <- function(e, dbi_table, enclos, single.ok) {
-  if (is_call_to(e) %chin% c(".", "list")) {
+  if (is_call_to(e) %in% c(".", "list")) {
     e <- as.list(e)[-1]
   }
 
@@ -73,12 +73,12 @@ preprocess_common <- function(e, dbi_table, enclos, single.ok) {
   if (is_call_to(e) == ":") {
     dbit_names <- names(dbi_table)
     if (is.name(lhs <- e[[2]])) {
-      if (is.na(lhs <- chmatch(as.character(lhs), dbit_names))) {
+      if (is.na(lhs <- match(as.character(lhs), dbit_names))) {
         stop("'", e[[2]], "' - subscript out of bounds", call. = FALSE)
       }
     }
     if (is.name(rhs <- e[[3]])) {
-      if (is.na(rhs <- chmatch(as.character(rhs), dbit_names))) {
+      if (is.na(rhs <- match(as.character(rhs), dbit_names))) {
         stop("'", e[[3]], "' - subscript out of bounds", call. = FALSE)
       }
     }
@@ -108,7 +108,7 @@ preprocess_common <- function(e, dbi_table, enclos, single.ok) {
       return(sapply(names(dbi_table), as.name, simplify = FALSE)[e])
     }
 
-    if (e_char %chin% names(dbi_table)) {
+    if (e_char %in% names(dbi_table)) {
       if (single.ok) {
         return(sapply(e_char, as.name, simplify = FALSE))
       } else {
@@ -262,14 +262,14 @@ handle_colon_equal <- function(x, i, j, by, env, x_sub) {
       lhs <- as.character(lhs)
     } else if (!length(all.vars(lhs))) {
       lhs <- as.character(eval(lhs, envir = env))
-    } else if (is_call_to(lhs) %chin% c(".", "list")) {
+    } else if (is_call_to(lhs) %in% c(".", "list")) {
       lhs <- vapply(as.list(lhs)[-1], deparse1, "")
     } else {
       stop("the left-hand-side of ':=' should be a character vector ",
            "or a list of names", call. = FALSE)
     }
 
-    if (is_call_to(j[[3L]]) %chin% c(".", "list")) {
+    if (is_call_to(j[[3L]]) %in% c(".", "list")) {
       j <- as.list(j[[3L]])[-1]
     } else {
       j <- list(j[[3L]])
@@ -303,24 +303,19 @@ handle_colon_equal <- function(x, i, j, by, env, x_sub) {
   a$names <- names(x)
   attributes(x) <- a
 
-  if (is.name(x_sub)) {
+  if (is.symbol(x_sub)) {
     x_name <- as.character(x_sub)
+    x_env <- find_environment(x_name, class = "dbi.table", envir = env)
 
-    if (!is.null(env[[x_name]]) || identical(env, .GlobalEnv)) {
-      if (is_dbi_catalog(env[["../catalog"]])) {
-        stop("'dbi.table's in 'dbi.catalog's cannot be modified by reference",
-             call. = FALSE)
-      } else {
-        assign(x_name, x, envir = env)
+    if (!is.null(x_env)) {
+      res <- try(assign(x_name, x, pos = x_env), silent = TRUE)
+      if (inherits(res, "try-error")) {
+        warning(attr(res, "condition")$message, call. = FALSE)
       }
-    } else {
-      warning("'", x_name, "' could not be modified in place")
     }
-  } else {
-    warning("dbi.table could not be modified in place")
   }
 
   #invisible doesn't work - use data.table's workaround
-  session$print <- address(x)
+  session$print <- x
   x
 }

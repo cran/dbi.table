@@ -25,8 +25,8 @@
 #'
 #' @seealso
 #'   \itemize{
-#'     \item \code{\link[data.table]{as.data.table}} to retrieve the
-#'           \emph{results set} as a \code{data.table},
+#'     \item \code{\link{as.data.frame}} to retrieve the
+#'           \emph{results set} as a \code{data.frame},
 #'     \item \code{\link{csql}} to see the underlying SQL query.
 #'   }
 #'
@@ -77,10 +77,10 @@ dbi.table <- function(conn, id) {
 
 new_dbi_table <- function(conn, id, fields = NULL) {
   if (inherits(id, "Id")) {
-    id_name <- last(id@name)
+    id_name <- id@name[[length(id@name)]]
   } else {
     id_name <- DBI::dbUnquoteIdentifier(dbi_connection(conn), id)[[1L]]@name
-    id_name <- last(id_name)
+    id_name <- id_name[[length(id_name)]]
   }
 
   if (substring(id_name, 1L, 1L) == "#") {
@@ -98,12 +98,11 @@ new_dbi_table <- function(conn, id, fields = NULL) {
 
   internal_name <- paste0(session$key_base, seq_len(length(fields)))
 
+  x <- names_list(internal_name, copy_vector(fields))
+
   fields <- data.frame(internal_name = internal_name,
                        id_name = id_name,
                        field = fields)
-
-  x <- lapply(fields$internal_name, as.name)
-  names(x) <- copy(fields$field)
 
   dbi_table_object(x, conn, data_source, fields)
 }
@@ -174,39 +173,28 @@ is.dbi.table <- function(x) {
 
 
 
-should_print <- function(x) {
-  ret <- (session$print == "" || address(x) != session$print)
-  session$print <- ""
-  ret
-}
-
-
-
 #' @export
 print.dbi.table <- function(x, ...) {
-  mimics_auto_print <- "knit_print.default"
-  if (!should_print(x)) {
-    scs <- sys.calls()
-    if (length(scs) <= 2L ||
-      (length(scs) >= 3L && is.symbol(this <- scs[[length(scs) - 2L]][[1L]]) &&
-      as.character(this) == "source") ||
-      (length(scs) > 3L && is.symbol(this <- scs[[length(scs) - 3L]][[1L]]) &&
-      as.character(this) %chin% mimics_auto_print)) {
-      return(invisible(x))
-    }
+  if (shouldnt_print(x)) {
+    return(invisible(x))
   }
 
-  ans <- as.data.table(x, n = 6)
+  ans <- as.data.frame(x, n = 6)
+  classes <- display_class(ans)
+
+  m <- as.matrix(format(ans))
+  m <- rbind(classes, m)
+  dimnames(m)[[1L]] <- rep.int("", nrow(m))
 
   cat(paste0("<", db_short_name(dbi_connection(x)), ">"),
       paste(get_data_source(x)$id_name, collapse = " + "),
       "\n")
 
-  if (nrow(ans) > 5L) {
-    print(ans[1:5], row.names = FALSE)
+  if (nrow(m) > 6L) {
+    print(m[1:6, , drop = FALSE], quote = FALSE, right = TRUE)
     cat(" ---\n")
-  } else if (nrow(ans) > 0L) {
-    print(ans, row.names = FALSE)
+  } else if (nrow(m) > 1L) {
+    print(m, quote = FALSE, right = TRUE)
   } else {
     m <- paste("Empty dbi.table (0 rows and", length(ans), "cols):",
                paste(names(ans), collapse = ","))
@@ -221,21 +209,24 @@ print.dbi.table <- function(x, ...) {
 
 
 
-#' @name as.data.table
+#' @name as.data.frame
 #'
-#' @aliases as.data.table.dbi.table
+#' @aliases as.data.frame.dbi.table
 #'
-#' @title Coerce to \code{data.table}
+#' @title Coerce to a Data Frame
 #'
 #' @description
 #'   Execute a \code{\link{dbi.table}}'s underlying SQL query and return the
-#'   result set as a \code{\link[data.table]{data.table}}. By default, the
+#'   result set as a \code{\link[base]{data.frame}}. By default, the
 #'   result set is limited to 10,000 rows. See Details.
 #'
 #' @param x
 #'   a \code{\link{dbi.table}}.
 #'
-#' @param keep.rownames
+#' @param row.names
+#'   a logical value. This argument is not used.
+#'
+#' @param optional
 #'   a logical value. This argument is not used.
 #'
 #' @param \dots
@@ -248,32 +239,32 @@ print.dbi.table <- function(x, ...) {
 #'   not include a LIMIT clause and all rows in the result set are returned.
 #'
 #' @details
-#'   By default, \code{as.data.table} returns up to 10,000 rows (see the
+#'   By default, \code{as.data.frame} returns up to 10,000 rows (see the
 #'   \code{n} argument). To override this limit, either call
-#'   \code{as.data.table} and provide the \code{n} argument (e.g., \code{n = -1}
+#'   \code{as.data.frame} and provide the \code{n} argument (e.g., \code{n = -1}
 #'   to return the entire result set), or set the option
 #'   \code{dbi_table_max_fetch} to the desired default value of \code{n}.
 #'
 #' @seealso
-#'   \code{\link[data.table]{as.data.table}} (the generic method in the
-#'   \pkg{data.table} package).
+#'   \code{\link[base]{as.data.frame}} (the generic method in the
+#'   \pkg{base} package).
 #'
 #' @return
-#'   a \code{dbi.table}.
+#'   a \code{data.frame}.
 #'
 #' @examples
 #'   duck <- chinook.duckdb()
 #'   Artist <- dbi.table(duck, DBI::Id("Artist"))
 #'
-#'   as.data.table(Artist, n = 7)[]
+#'   as.data.frame(Artist, n = 7)[]
 #'
 #'   \dontshow{DBI::dbDisconnect(duck)}
 #'
 #' @rdname
-#'   as.data.table
+#'   as.data.frame
 #'
 #' @export
-as.data.table.dbi.table <- function(x, keep.rownames = FALSE, ...,
+as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
                                     n = getOption("dbi_table_max_fetch",
                                                   10000L)) {
   res <- try(DBI::dbSendStatement(dbi_connection(x),
@@ -317,7 +308,7 @@ as.data.table.dbi.table <- function(x, keep.rownames = FALSE, ...,
     }
   }
 
-  setDT(DBI::dbFetch(res, n = n))
+  DBI::dbFetch(res, n = n)
 }
 
 
@@ -438,7 +429,10 @@ as.data.table.dbi.table <- function(x, keep.rownames = FALSE, ...,
   }
 
   if (is.null(i) && is.null(j)) {
-    return(as.data.table(x))
+    if (requireNamespace("data.table")) {
+      return(as_data_table(x))
+    }
+    stop("package 'data.table' is not installed")
   }
 
   if (is_call_to(j) == ":=") {

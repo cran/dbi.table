@@ -16,6 +16,7 @@ db_short_name <- function(conn) {
 
 
 dbi_connection_package <- function(conn) {
+  conn <- dbi_connection(conn)
   if (!is.null(pkg <- attr(class(conn), "package", exact = TRUE))) {
     pkg
   } else {
@@ -30,7 +31,8 @@ check_id <- function(id) {
     stop("'id' has more than 3 components", call. = FALSE)
   }
 
-  valid_names <- last(c("table_catalog", "table_schema", "table_name"), n)
+  valid_names <- c("table_name", "table_schema", "table_catalog")[seq_len(n)]
+  valid_names <- rev(valid_names)
 
   if (is.null(id_names <- names(id@name))) {
     names(id@name) <- valid_names
@@ -89,4 +91,86 @@ pad_left <- function(x, width = 6) {
 
 unique_table_name <- function(pre = "X") {
   paste0(pre, (session$table_name_counter <- 1L + session$table_name_counter))
+}
+
+
+
+find_environment <- function(x, mode = "any", class = NULL,
+                             envir = parent.frame()) {
+  if (identical(envir, emptyenv())) {
+    return(NULL)
+  }
+
+  if (!is.character(x) && !is.symbol(x <- substitute(x))) {
+    return(NULL)
+  }
+
+  x <- as.character(x)[[1L]]
+
+  if (!is.null(obj <- get0(x, envir, mode, inherits = FALSE))) {
+    if (is.null(class)) {
+      return(envir)
+    } else if (inherits(obj, class)) {
+      return(envir)
+    }
+  }
+
+  find_environment(x, mode, class, parent.env(envir))
+}
+
+
+
+assign_and_lock <- function(x, value, pos) {
+  assign(x, value, pos)
+  lockBinding(x, pos)
+  return(TRUE)
+}
+
+
+
+make_install_function <- function(catalog, id, fields, column_names) {
+  function(x) {
+    if (missing(x)) {
+      dbi_table <- new_dbi_table(catalog, id, fields)
+      names(dbi_table) <- copy_vector(column_names)
+      return(dbi_table)
+    }
+
+    stop("'dbi.table' cannot be modified", call. = FALSE)
+  }
+}
+
+
+
+install_in_schema <- function(x, catalog, id, fields, column_names, schema) {
+  FUN <- make_install_function(catalog, id, fields, column_names)
+  makeActiveBinding(x, FUN, schema)
+  lockBinding(x, schema)
+}
+
+
+
+short_class_names <- c(integer = "int", numeric = "num",
+                       character = "char", POSIXct = "POSc",
+                       logical = "lgcl", integer64 = "i64")
+
+display_class <- function(l) {
+  classes <- vapply(l, function(u) class(u)[[1L]], character(1L))
+  idx <- classes %in% names(short_class_names)
+  classes[idx] <- short_class_names[classes[idx]]
+  paste0("<", classes, ">")
+}
+
+
+
+shouldnt_print <- function(x) {
+  ret <- identical(x, session$print)
+  session$print <- NULL
+  ret
+}
+
+
+
+copy_vector <- function(x) {
+  rev(rev(x))
 }

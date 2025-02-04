@@ -39,6 +39,7 @@
 #'   a logical value.
 #'
 #' @examples
+#'   library(data.table)
 #'   duck <- dbi.catalog(chinook.duckdb)
 #'   Album <- duck$main$Album
 #'   Artist <- duck$main$Artist
@@ -48,6 +49,10 @@
 #' @export
 reference.test <- function(expr, envir = parent.frame(),
                            ignore.row.order = TRUE, verbose = TRUE) {
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("package 'data.table' is not installed")
+  }
+
   expr <- substitute(expr)
 
   dbits <- sapply(all.vars(expr), get0, envir = envir, simplify = FALSE)
@@ -57,26 +62,31 @@ reference.test <- function(expr, envir = parent.frame(),
     stop("'expr' must contain at least one dbi.table")
   }
 
-  dbits <- lapply(dbits, as.data.table)
+  dbits <- lapply(dbits, data.table::as.data.table)
 
   dbit_eval <- eval(expr, envir = envir)
-  if (!(is.dbi.table(dbit_eval) || is.data.table(dbit_eval))) {
+  if (!(is.dbi.table(dbit_eval) || data.table::is.data.table(dbit_eval))) {
     stop("'expr' must return a 'dbi.table' or a 'data.table'")
   }
 
-  dbit_eval <- as.data.table(dbit_eval)
+  dbit_eval <- data.table::as.data.table(dbit_eval)
   dt_eval <- eval(expr, envir = dbits, enclos = envir)
 
   # merge sets key by default so unkey
-  setkey(dbit_eval, NULL)
-  setkey(dt_eval, NULL)
+  data.table::setkey(dbit_eval, NULL)
+  data.table::setkey(dt_eval, NULL)
 
   eq <- all.equal(dt_eval, dbit_eval,
                   ignore.row.order = ignore.row.order)
 
   if (verbose && !isTRUE(eq)) {
-    message(eq)
+    message(paste(eq, collapse = "\n"))
   }
 
   isTRUE(eq)
 }
+
+
+# Need to tell data.table that dbi.table is data.table aware b/c nothing
+# imported from data.table.
+.datatable.aware <- TRUE

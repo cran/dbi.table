@@ -377,8 +377,9 @@ This connection is a typical DBI connection as returned by
 <code>DBI::dbConnect</code> that can be used as the <code>conn</code>
 argument in DBI package functions. Let’s get started by loading the
 package and opening the connection.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(dbi.table)</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>chinook <span class="ot">&lt;-</span> <span class="fu">chinook.duckdb</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(data.table)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">library</span>(dbi.table)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>chinook <span class="ot">&lt;-</span> <span class="fu">chinook.duckdb</span>()</span></code></pre></div>
 <div id="create-a-single-dbi.table" class="section level2" number="2.1">
 <h2><span class="header-section-number">2.1</span> Create a Single
 <code>dbi.table</code></h2>
@@ -590,7 +591,7 @@ referencing the <code>Album</code> table. For this example, when the
 ##  LIMIT 10000</code></pre>
 <p>When the <code>y</code> argument is omitted, <code>dbi.table</code>’s
 <code>merge</code> uses the foreign key constraints that reference
-<code>x</code> to determin the <code>y</code> (or <code>y</code>s) to
+<code>x</code> to determine the <code>y</code> (or <code>y</code>s) to
 merge with.</p>
 <div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Track))</span></code></pre></div>
 <pre><code>## SELECT Track.MediaTypeId AS MediaTypeId,
@@ -610,13 +611,13 @@ merge with.</p>
 ##   FROM chinook_duckdb.main.Track AS Track
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.Album AS Album
-##     ON Album.AlbumId = Track.AlbumId
+##     ON Track.AlbumId = Album.AlbumId
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.Genre AS Genre
-##     ON Genre.GenreId = Track.GenreId
+##     ON Track.GenreId = Genre.GenreId
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.MediaType AS MediaType
-##     ON MediaType.MediaTypeId = Track.MediaTypeId
+##     ON Track.MediaTypeId = MediaType.MediaTypeId
 ## 
 ##  LIMIT 10000</code></pre>
 <p>When the optional <code>recursive</code> argument is
@@ -643,16 +644,16 @@ has a foreign key that references <code>Artist</code>.</p>
 ##   FROM chinook_duckdb.main.Track AS Track
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.Album AS Album
-##     ON Album.AlbumId = Track.AlbumId
+##     ON Track.AlbumId = Album.AlbumId
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.Genre AS Genre
-##     ON Genre.GenreId = Track.GenreId
+##     ON Track.GenreId = Genre.GenreId
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.MediaType AS MediaType
-##     ON MediaType.MediaTypeId = Track.MediaTypeId
+##     ON Track.MediaTypeId = MediaType.MediaTypeId
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.Artist AS Artist
-##     ON Artist.ArtistId = Album.ArtistId
+##     ON Album.ArtistId = Artist.ArtistId
 ## 
 ##  LIMIT 10000</code></pre>
 </div>

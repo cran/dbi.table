@@ -1,8 +1,10 @@
 #' Attach a Database Schema to the Search Path
 #'
 #' @description
-#'   Create a \code{\link{dbi.table}} for each database object in a schema and
-#'   place them on the search path.
+#'   The database schema is attached to the R search path. This means that the
+#'   schema is searched by R when evaluating a variable, so that
+#'   \code{\link{dbi.table}}s in the schema can be accessed by simply giving
+#'   their names.
 #'
 #' @param what
 #'   a connection handle returned by \code{\link[DBI]{dbConnect}} or a
@@ -38,45 +40,52 @@
 dbi.attach <- function(what, pos = 2L, name = NULL, warn.conflicts = FALSE,
                        schema = NULL, graphics = TRUE) {
   what_name <- deparse1(substitute(what))
-  what <- init_connection(what)
 
-  db <- dbi.catalog(what)
+  if (!is.null(name) && (length(name <- as.character(name)) != 1L)) {
+    stop("'name' is not a scalar character string")
+  }
 
-  schemas <- setdiff(ls(db), c("information_schema", "pg_catalog"))
+  catalog <- dbi.catalog(what, schemas = schema)
+  schemas <- setdiff(ls(catalog, all.names = TRUE), "./dbi_connection")
 
   if (is.null(schema)) {
-    if (length(schemas) == 1L) {
-      schema <- schemas[[1L]]
-    } else if (length(schemas) && interactive()) {
-      schema <- utils::menu(schemas,
+    choices <- setdiff(schemas, session$ignore_schemas)
+    if (length(choices) == 1L) {
+      schema <- choices
+    } else if (length(choices) > 1L && interactive()) {
+      schema <- utils::menu(choices,
                             graphics = graphics,
                             title = "Select Schema")
-      if (schema > 0) {
-        schema <- schemas[[schema]]
-      } else {
+      if (schema == 0L) {
         return(invisible())
+      } else {
+        schema <- choices[[schema]]
       }
     } else {
-      stop("error setting up database")
+      schema <- NA_character_
     }
   } else {
-    if (!(schema %chin% schemas)) {
-      stop("schema '", schema, "' not found")
+    schema <- as.character(schema)
+    if (length(schema) != 1L) {
+      stop("'schema' is not a scalar character string")
     }
   }
 
+  if (!(schema %in% schemas)) {
+    stop("schema '", schema, "' not found on connection '", what_name, "'")
+  }
+
+  what <- catalog[[schema]]
+  schema <- get("./schema_name", pos = what, inherits = FALSE)
+
   if (is.null(name)) {
-    if (schema %chin% c("main", "dbo")) {
+    if (schema %in% c("main", "dbo")) {
       name <- db_short_name(what)
     } else {
       name <- schema
     }
 
     name <- paste(dbi_connection_package(what), name, sep = ":")
-  } else {
-    name <- paste(dbi_connection_package(what),
-                  as.character(name)[[1L]],
-                  sep = ":")
   }
 
   if (name %in% search()) {
@@ -89,19 +98,13 @@ dbi.attach <- function(what, pos = 2L, name = NULL, warn.conflicts = FALSE,
   #                path unless that is their purpose."
   #
   # The intended purpose of dbi.attach is to add data on the search path.
-  # Mask the attach funcation as 'fun' to avoid R CMD check error.
 
-  e <- get("attach", "package:base")(NULL, pos = pos, name = name,
-           warn.conflicts = warn.conflicts)
+  e <- get("attach", "package:base")(what, pos = pos, name = name,
+                                     warn.conflicts = warn.conflicts)
+  class(e) <- "dbi.schema"
 
-  e <- init_schema(e, schema, db)
-
-  for (tab in ls(db[[schema]])) {
-    e[[tab]] <- db[[schema]][[tab]]
-  }
-
-  rm(list = schema, pos = db)
-  db[[schema]] <- e
+  rm(list = schema, pos = catalog)
+  assign_and_lock(schema, e, catalog)
 
   invisible(e)
 }

@@ -1,4 +1,5 @@
 conns <- list(chinook.sqlite(), chinook.duckdb())
+DBI::dbExecute(conns[[2L]], "SET threads TO 1;")
 
 for (conn in conns) {
 
@@ -212,7 +213,6 @@ for (conn in conns) {
       verbose = FALSE
     ))
   })
-
 
 
 

@@ -6,6 +6,7 @@ old_opts <- options(width = 90)
 # devtools::install_github("kjellpk/dbi.table")
 
 ## ----library, message = FALSE-----------------------------------------------------------
+library(data.table)
 library(dbi.table)
 chinook <- chinook.duckdb()
 

@@ -6,72 +6,104 @@
 #'   a connection handle returned by \code{\link[DBI]{dbConnect}} or a
 #'   zero-argument function that returns a connection handle.
 #'
-#' @return \code{dbi.catalog} returns a \code{dbi.catalog} (internally an
-#'         \code{\link[base]{environment}} with the class attribute set to
-#'         \code{"dbi.catalog"}).
+#' @param schemas
+#'   a character vector of distinct schema names. These schemas will be loaded
+#'   into the \code{dbi.catalog}. The default \code{schemas = NULL} loads all
+#'   schemas in the catalog.
+#'
+#' @return
+#'   a \code{dbi.catalog}.
 #'
 #' @examples
 #' # chinook.duckdb is a zero-argument function that returns a DBI handle
 #' (db <- dbi.catalog(chinook.duckdb))
 #'
-#' # a dbi.catalog corresponds to a catalog - list the schemas
+#' # list schemas
 #' ls(db)
 #'
 #' # list the tables in the schema 'main'
 #' ls(db$main)
 #'
 #' @export
-dbi.catalog <- function(conn) {
-  conn <- get_connection(init_connection(conn))
-  db <- new.env(parent = emptyenv())
+dbi.catalog <- function(conn, schemas = NULL) {
+  conn <- init_connection(conn)
 
-  db$.dbi_connection <- conn
-  class(db) <- "dbi.catalog"
+  catalog <- new.env(parent = emptyenv())
+  assign("./dbi_connection", conn, catalog)
 
   if (!is.null(attr(conn, "recon", exact = TRUE))) {
-    reg.finalizer(db, dbi.catalog_disconnect, onexit = TRUE)
+    reg.finalizer(catalog, dbi.catalog_disconnect, onexit = TRUE)
   }
 
-  db$information_schema <- information_schema(conn, db)
-  objs <- list_database_objects(conn, db$information_schema)
+  class(catalog) <- "dbi.catalog"
 
-  dbname <- DBI::dbGetInfo(conn)$dbname
-
-  if (nchar(dbname)) {
-    if (nrow(schema <- objs[schema == dbname])) {
-      objs <- schema
-    } else if (nrow(catalog <- objs[catalog == dbname])) {
-      objs <- catalog
-    }
+  if (is.null(columns <- get_init_columns(catalog))) {
+    info <- bare_bones_information_schema(catalog)
+    columns <- as.data.frame(info$columns)
+  } else {
+    info <- information_schema(catalog, columns)
   }
 
-  for (i in seq_len(nrow(objs))) {
-    obj <- objs[i]
-    if (is.null(table_schema <- obj$table_schema)) {
-      table_schema <- "main"
-    }
-
-    if (tolower(table_schema) == "information_schema") next
-
-    if (is.null(db[[table_schema]])) {
-      db[[table_schema]] <- new_schema(name = table_schema, catalog = db)
-    }
-
-    table_name <- obj$table_name
-    id <- obj$table_id[[1L]]
-    column_names <- obj$column_names[[1L]]
-
-    db[[table_schema]][[table_name]] <- new_dbi_table(db, id, column_names)
+  if (is.null(columns$table_schema)) {
+    schema_names <- columns$table_schema <- "main"
+  } else {
+    schema_names <- setdiff(unique(columns$table_schema), "information_schema")
   }
 
-  db
+  if (is.null(schemas)) {
+    schemas <- schema_names
+  } else {
+    schemas <- intersect(as.character(schemas), schema_names)
+  }
+
+  names(schemas) <- schemas
+  schemas <- lapply(schemas, new_schema, catalog = catalog)
+
+  install_from_columns(columns, schemas, catalog)
+
+  catalog
+}
+
+
+
+install_from_columns <- function(columns, schemas, catalog, to_lower = FALSE) {
+  schema_names <- names(schemas)
+  id_cols <- intersect(c("table_catalog", "table_schema", "table_name"),
+                       names(columns))
+
+  columns <- subset(columns,
+                    subset = table_schema %in% schema_names,
+                    select = c(id_cols, c("column_name", "ordinal_position")))
+
+  tables <- split(columns, columns[, id_cols], drop = TRUE)
+
+  tables <- lapply(tables, function(u) {
+    id <- DBI::Id(unlist(u[1L, id_cols]))
+    fields <- u$column_name[order(u$ordinal_position)]
+
+    if (to_lower) {
+      table_schema <- tolower(u$table_schema[[1L]])
+      table_name <- tolower(u$table_name[[1L]])
+      column_names <- tolower(fields)
+    } else {
+      table_schema <- u$table_schema[[1L]]
+      table_name <- u$table_name[[1L]]
+      column_names <- fields
+    }
+
+    schema <- schemas[[table_schema]]
+
+    install_in_schema(table_name, catalog, id, fields, column_names, schema)
+  })
+
+  invisible()
 }
 
 
 
 dbi.catalog_disconnect <- function(e) {
-  on.exit(rm(list = ".dbi_connection", envir = e))
-  try(DBI::dbDisconnect(e[[".dbi_connection"]]), silent = TRUE)
+  on.exit(rm(list = "./dbi_connection", envir = e))
+  try(DBI::dbDisconnect(dbi_connection(e)), silent = TRUE)
 }
 
 
@@ -109,40 +141,18 @@ is_dbi_catalog <- function(x) {
 
 
 
-list_database_objects <- function(conn, info) {
-  if (is.null(columns <- info$.init_cols)) {
-    columns <- info$columns
-  } else {
-    rm(".init_cols", pos = info)
-  }
-
-  columns <- as.data.table(columns)
-
-  id_columns <- c("table_catalog", "table_schema", "table_name")
-  id_columns <- id_columns[id_columns %chin% names(columns)]
-
-  columns[, list(table_id = list(DBI::Id(unlist(.BY))),
-                 column_names = list(column_name)),
-          by = id_columns]
+new_schema <- function(schema_name, catalog) {
+  init_schema(new.env(parent = emptyenv()), schema_name, catalog)
 }
 
 
 
-new_schema <- function(name, catalog) {
-  init_schema <- init_schema(new.env(parent = emptyenv()), name, catalog)
-}
-
-
-
-init_schema <- function(e, name, catalog) {
-  name <- as.character(name)[[1L]]
-  stopifnot(is_dbi_catalog(catalog))
-
-  assign("./schema_name", name, pos = e)
-  assign("../catalog", catalog, pos = e)
-
-  class(e) <- "dbi.schema"
-  e
+init_schema <- function(schema, schema_name, catalog) {
+  assign_and_lock(schema_name, schema, catalog)
+  assign_and_lock("./schema_name", schema_name, schema)
+  assign_and_lock("../catalog", catalog, schema)
+  class(schema) <- "dbi.schema"
+  schema
 }
 
 
