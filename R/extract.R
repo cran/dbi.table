@@ -151,21 +151,43 @@ handle_i_call <- function(x, i, enclos) {
 
 
 
-update_order_by <- function(x, i, enclos) {
-  i <- as.list(i[-1])
-  i <- i[!vapply(i, is.null, FALSE)]
+update_order_by <- function(x, i, include_key = FALSE) {
+  order_by <- NULL
 
-  if (length(i) < 1) {
-    return(list())
+  if (include_key && length(x_key <- get_key(x))) {
+    x_key <- c(x)[x_key]
+  } else {
+    x_key <- NULL
   }
 
-  unique(c(i, get_order_by(x)))
+  if (is.call(i)) {
+    i <- as.list(i[-1])
+
+    if (length(i) == 1L && is.null(x[[1L]])) {
+      return(x_key)
+    }
+
+    order_by <- c(order_by, i[!vapply(i, is.null, FALSE)])
+  }
+
+  unique(c(order_by, get_order_by(x), x_key))
 }
 
 
 
 handle_i_order <- function(x, i, enclos) {
-  attr(x, "order_by") <- update_order_by(x, i, enclos)
+  order_by <- update_order_by(x, i)
+
+  if (length(x_key <- get_key(x))) {
+    x_key <- names_list(x_key)
+    m <- min(length(x_key), length(order_by))
+
+    if (!all(mapply(identical, sub_lang(x_key[m], c(x), NULL), order_by[m]))) {
+      attr(x, "sorted") <- NULL
+    }
+  }
+
+  attr(x, "order_by") <- order_by
   x
 }
 
@@ -187,7 +209,7 @@ handle_by <- function(x, by, enclos) {
 
   by <- sub_lang(by, envir = x, enclos = enclos)
 
-  if (length(window_calls(by, dbi_connection(x)))) {
+  if (length(window_calls(by, x))) {
     stop("Aggregate and window functions are not allowed in 'by'",
          call. = FALSE)
   }
@@ -201,6 +223,8 @@ handle_j <- function(x, j, by, enclos) {
   if (is.null(j)) {
     return(x)
   }
+
+  x_key_cols <- c(x)[get_key(x)]
 
   if (is.null(j_names <- names(j))) {
     j_names <- paste0("V", seq_along(j))
@@ -218,14 +242,20 @@ handle_j <- function(x, j, by, enclos) {
   if (all(calls_can_aggregate(j))) {
     a$group_by <- by
   } else {
-    j <- handle_over(x, j, by, a$order_by)
+    j <- handle_over(x, j, by, update_order_by(x, NULL, include_key = TRUE))
   }
 
+  names(j) <- j_names
   j <- c(by, j)
-  a$names <- c(names(by), j_names)
-  attributes(j) <- a
 
-  j
+  j_key <- match(x_key_cols, j, nomatch = 0L)
+  j_key <- j_key[j_key > 0L]
+  j_key <- names(j)[j_key]
+
+  dbi_table_object(cdefs = j, conn = a$conn, data_source = a$data_source,
+                   fields = a$fields, key = j_key, distinct = a$distinct,
+                   where = a$where, group_by = a$group_by,
+                   order_by = a$order_by, ctes = a$ctes)
 }
 
 
@@ -233,7 +263,7 @@ handle_j <- function(x, j, by, enclos) {
 handle_over <- function(x, j, partition, order) {
   over <- list(partition_by = unname(partition), order_by = unname(order))
 
-  for (k in window_calls(j, dbi_connection(x))) {
+  for (k in window_calls(j, x)) {
     attr(j[[k]], "over") <- over
   }
 
@@ -242,18 +272,14 @@ handle_over <- function(x, j, partition, order) {
 
 
 
-handle_colon_equal <- function(x, i, j, by, env, x_sub) {
-  if (!is.null(i)) {
-    if (is_call_to(i) == "order") {
-      order_by <- update_order_by(x, i, enclos = env)
-    } else {
-      stop("when using :=, if 'i' is not missing it must be a call to 'order'",
-           call. = FALSE)
-    }
-  } else {
-    order_by <- NULL
+handle_the_walrus <- function(x, i, j, by, env, x_sub) {
+
+  if (length(i) && !is_call_to(i) == "order") {
+    stop("when using :=, if 'i' is not missing it must be a call to 'order'",
+         call. = FALSE)
   }
 
+  order_by <- update_order_by(x, i, include_key = TRUE)
   by <- handle_by(x, by)
 
   if (length(j) == 3L) {
@@ -308,7 +334,15 @@ handle_colon_equal <- function(x, i, j, by, env, x_sub) {
     x_env <- find_environment(x_name, class = "dbi.table", envir = env)
 
     if (!is.null(x_env)) {
-      res <- try(assign(x_name, x, pos = x_env), silent = TRUE)
+      if (is_dbi_schema(x_env)) {
+        search_path_envs <- lapply(search(), as.environment)
+
+        if (any(vapply(search_path_envs, identical, FALSE, y = x_env))) {
+          x_env <- env
+        }
+      }
+
+      res <- stry(assign(x_name, x, pos = x_env))
       if (inherits(res, "try-error")) {
         warning(attr(res, "condition")$message, call. = FALSE)
       }

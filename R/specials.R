@@ -1,3 +1,11 @@
+add_special <- function(symbol, fun = unsupported(symbol)) {
+  stopifnot(is.character(symbol) && (length(symbol) == 1L) && nchar(symbol) > 0)
+  session$special_symbols[[symbol]] <- fun
+  invisible()
+}
+
+
+
 unsupported <- function(sym) {
   eval(bquote(function(e, dbi_table, specials, env) {
     stop("the 'data.table' special symbol '", .(sym), "' is not supported by ",
@@ -7,65 +15,19 @@ unsupported <- function(sym) {
 
 
 
-special_list <- function(e, dbi_table, specials, env) {
-  e[[1]] <- as.name("list")
-
-  if (is.null(nm <- names(e))) {
-    nm <- character(length(e))
-  }
-
-  if (any(idx <- (nchar(nm) == 0L) & vapply(e, is.name, FALSE))) {
-    tmp <- vapply(e[idx], as.character, "")
-    is_spec <- tmp %in% names(session$special_symbols)
-    tmp[is_spec] <- ifelse(substring(tmp[is_spec], 1, 1) == ".",
-                           substring(tmp[is_spec], 2),
-                           tmp[is_spec])
-    nm[idx] <- tmp
-    names(e) <- nm
-  }
-
-  lapply(e[-1], sub_lang, envir = dbi_table, specials = specials, enclos = env)
-}
-
-
-
-special_colon_equals <- function(e, dbi_table, specials, env) {
-  if (length(e) == 2L && !is.null(names(e[[2]]))) {
-    e[2] <- sub_lang(e[2], envir = dbi_table, specials = specials,
-                     enclos = env)
-    return(e)
-  }
-
-  rhs <- sub_lang(e[[3]], envir = dbi_table, specials = specials, enclos = env)
-
-  if (is_call_to(rhs) == "list") {
-    rhs[[1]] <- as.name(":=")
-  } else {
-    rhs <- call(":=", rhs)
-  }
-
-  if (is.call(nm <- e[[2]])) {
-    lhs <- eval(nm, env)
-  } else if (is.name(nm)) {
-    lhs <- as.character(nm)
-  }
-
-  if (is.null(nms <- names(rhs))) {
-    nms <- character(length(rhs))
-  }
-
-  nms[-1] <- lhs
-  names(rhs) <- nms
-  rhs
-}
-
-
-
 special_in <- function(e, dbi_table, specials, env) {
   e[[1]] <- as.name("%in%")
   e[[2]] <- sub_lang(e[[2]], dbi_table, specials, env)
   e[[3]] <- if_allowed_mode(eval(e[[3]], envir = env))
   e
+}
+
+
+
+special_notin <- function(e, dbi_table, specials, env) {
+  e[[1]] <- as.name("%in%")
+  e <- as.call(list(as.name("!"), e))
+  sub_lang(e, dbi_table, specials, env)
 }
 
 
@@ -105,8 +67,42 @@ special_LIKE <- function(e, dbi_table, specials, env) {
 
 
 
-add_special <- function(symbol, fun = unsupported(symbol)) {
-  stopifnot(is.character(symbol) && (length(symbol) == 1L) && nchar(symbol) > 0)
-  session$special_symbols[[symbol]] <- fun
-  invisible()
+special_order <- function(e, dbi_table, specials, env) {
+  e[[1L]] <- as.name("order")
+  sub_lang(e, dbi_table, enclos = env)
+}
+
+
+
+shift_args <- function(x, n = 1L, fill = NA, type = "lag", give.names = FALSE) {
+  list(n = n, fill = fill, type = type, give.names = give.names)
+}
+
+
+
+special_shift <- function(e, dbi_table, specials, env) {
+  sargs <- e
+  sargs[[1L]] <- as.name("shift_args")
+  sargs <- eval(sargs)
+
+  n <- as.integer(sargs$n)
+  fill <- sargs$fill
+  type <- match.arg(sargs$type, choices = c("lag", "lead", "shift", "cyclic"))
+
+  if (type == "cyclic") {
+    stop("'type = cyclic' is not supported by dbi.table", call. = FALSE)
+  }
+
+  if (type == "shift") {
+    type <- "lag"
+  }
+
+  if (n < 0L) {
+    n <- abs(n)
+    type <- ifelse(type == "lag", "lead", "lag")
+  }
+
+  # Don't call 'call' here directly - R CMD check throws a partial match warning
+  e <- as.call(list(as.name(type), x = e[[2L]], n = n, default = fill))
+  sub_lang(e, dbi_table, enclos = env)
 }

@@ -14,7 +14,7 @@
   all = FALSE,
   all.x = all,
   all.y = all,
-  sort = FALSE,
+  sort = TRUE,
   suffixes = c(".x", ".y"),
   no.dups = TRUE,
   recursive = FALSE,
@@ -22,9 +22,13 @@
 )
 }
 \arguments{
-\item{x, y}{\code{\link{dbi.table}}s sharing the same DBI connection.}
+\item{x, y}{\code{\link{dbi.table}}s sharing the same DBI connection. If \code{y} is
+not a \code{dbi.table} but does inherit from \code{data.frame}, then it is
+coerced to a \code{dbi.table} using \code{\link{as.dbi.table}}. If \code{y}
+is missing, a merge is performed for each of \code{x}'s foreign keys.}
 
-\item{by}{A vector of shared column names in \code{x} and \code{y} to merge on.}
+\item{by}{a character vector of shared column names in \code{x} and \code{y} to merge
+on.}
 
 \item{by.x, by.y}{character vectors of column names in \code{x} and \code{y} to merge on.}
 
@@ -39,7 +43,8 @@ are included in the output.}
 
 \item{all.y}{a logical value. Analogous to \code{all.x} above.}
 
-\item{sort}{a logical value. Currently ignored.}
+\item{sort}{a logical value. When TRUE (default), the key of the merged
+\code{dbi.table} is set to the \code{by} / \code{by.x} columns.}
 
 \item{suffixes}{a length-2 character vector. The suffixes to be used for making
 non-\code{by} column names unique. The suffix behavior works in a similar
@@ -50,33 +55,45 @@ non-\code{by.y} column names in \code{y} when they have the same column
 name as any \code{by.x}.}
 
 \item{recursive}{a logical value. Only used when \code{y} is missing. When \code{TRUE},
-\code{merge} is called recursively on each of the just-merged
-\code{dbi.table}s. See examples.}
+\code{merge} is called on each \code{dbi.table} prior to merging with
+\code{x}. See examples.}
 
-\item{\dots}{additional arguments are ignored.}
+\item{\dots}{additional arguments are passed to \code{\link{as.dbi.table}}.}
 }
 \value{
 a \code{\link{dbi.table}}.
 }
 \description{
-Merge two \code{\link{dbi.table}}s. The \code{dbi.table} method is similar
-  to the \code{\link[data.table]{data.table}} method except that the result
-  set is only determined up to row order and is not sorted by default.
+Merge two \code{\link{dbi.table}}s. By default, the columns to merge on are
+  determined by the first of the following cases to apply.
 
-  Default merge columns: if \code{x} has a foreign key constraint that
-  references \code{y} then the columns comprising this key are used; see
-  details. When a foreign key cannot be found, then the common columns
-  between the two \code{dbi.tables}s are used.
+  \enumerate{
+    \item If \code{x} and \code{y} are each unmodified \code{dbi.table}s in
+          the same \code{dbi.catalog} and if there is a single foreign key
+          relating \code{x} and \code{y} (either \code{x} referencing
+          \code{y}, or \code{y} referencing \code{x}), then it is used to set
+          \code{by.x} and \code{by.y}.
+
+    \item If \code{x} and \code{y} have shared key columns, then they are
+          used to set \code{by} (that is,
+          \code{by = intersect(key(x), key(y))} when
+          \code{intersect(key(x), key(y))} has length greater than zero).
+
+    \item If \code{x} has a key, then it is used to set \code{by} (that is,
+          \code{by = key(x)} when \code{key(x)} has length greater than
+          zero).
+
+    \item If \code{x} and \code{y} have columns in common, then they are used
+          to set
+          \code{by} (that is, \code{by = intersect(names(x), names(y))} when
+          \code{intersect(names(x), names(y))} has length greater than zero).
+  }
 
   Use the \code{by}, \code{by.x}, and \code{by.y} arguments explicitly to
   override this default.
 }
 \details{
-Foreign key constraints. Foreign keys can only be queried when (1) the
-  \code{dbi.table}'s schema is loaded, and (2) \code{dbi.table} understands
-  the underlying database's information schema.
-
-  \code{merge.dbi.table} uses \code{\link{sql.join}} to join \code{x} and
+\code{merge.dbi.table} uses \code{\link{sql.join}} to join \code{x} and
   \code{y} then formats the result set to match the typical \code{merge}
   output.
 }
@@ -89,11 +106,15 @@ Foreign key constraints. Foreign keys can only be queried when (1) the
   #When y is omitted, x's foreign key relationship is used to determine y
   merge(chinook$main$Album)
 
-  #Multiple foreign keys are supported
-  csql(merge(chinook$main$Track))
+  #Track has 3 foreign keys: merge with Album, Genre, and MediaType
+  merge(chinook$main$Track)
 
   #Track references Album but not Artist, Album references Artist
-  #This dbi.table includes Artist.Name as well
-  csql(merge(chinook$main$Track, recursive = TRUE))
+  #This dbi.table includes the artist name
+  merge(chinook$main$Track, recursive = TRUE)
 
+}
+\seealso{
+\code{\link[data.table]{merge.data.table}},
+  \code{\link[base]{merge.data.frame}}
 }

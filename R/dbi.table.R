@@ -20,6 +20,19 @@
 #'   (advanced) identifying a database object (e.g., table or view) on
 #'   \code{conn}.
 #'
+#' @param check.names
+#'   Just as \code{check.names} in \code{\link[data.table]{data.table}} and
+#'   \code{\link[base]{data.frame}}.
+#'
+#' @param key
+#'   A character vector of one or more column names to set as the resulting
+#'   \code{dbi.table}'s key.
+#'
+#' @param stringsAsFactors
+#'   A logical value (default is \code{FALSE}). Convert all \code{character}
+#'   columns to \code{factor}s when executing the \code{dbi.table}'s underlying
+#'   SQL query and retrieving the result set.
+#'
 #' @return
 #'   A \code{dbi.table}.
 #'
@@ -29,6 +42,60 @@
 #'           \emph{results set} as a \code{data.frame},
 #'     \item \code{\link{csql}} to see the underlying SQL query.
 #'   }
+#'
+#' @section Keys:
+#'   A key marks a \code{dbi.table} as sorted with an attribute \code{"sorted"}.
+#'   The sorted columns are the key. The key can be any number of columns.
+#'   Unlike \code{data.table}, the underlying data are not physically sorted, so
+#'   there is no performance improvement. However, there remain benefits to
+#'   using keys:
+#'
+#'   \enumerate{
+#'     \item The key provides a default order for window queries so that
+#'           functions like \code{\link[data.table]{shift}} and
+#'           \code{\link[base]{cumsum}} give reproducible output.
+#'     \item \code{dbi.table}'s \code{merge} method uses a \code{dbi.table}'s
+#'           key to determin the default columns to merge on in the same way
+#'           that \code{data.table}'s merge method does. Note: if a
+#'           \code{dbi.table} has a foreign key relationship, that will be used
+#'           to determin the default columns to merge on before the
+#'           \code{dbi.table}'s key is considered.
+#'   }
+#'
+#'   A table's primary key is used as the default \code{key} when it can be
+#'   determined.
+#'
+#'   \strong{Differences vs. \code{data.table} Keys}
+#'
+#'   There are a few key differences between \code{dbi.table} keys and
+#'   \code{data.table} keys.
+#'
+#'   \enumerate{
+#'     \item In \code{data.table}, \code{NA}s are always first. Some databases
+#'           (e.g., PostgreSQL) sort \code{NULL}s last by default and some
+#'           databases (e.g., SQLite) sort them first. \code{as.data.frame} does
+#'           not change the order of the result set returned by the database.
+#'           Note that \code{as.data.table} uses the \code{dbi.table}'s key so
+#'           that the resulting \code{data.table} is sorted in the usual
+#'           \code{data.table} way.
+#'     \item The sort is \emph{not} stable: the order of ties may change on
+#'           subsequent evaluations of the \code{dbi.table}'s underlying SQL
+#'           query.
+#'   }
+#'
+#'   \strong{Strict Processing of Keys}
+#'
+#'   By default, when previewing data (\code{dbi.table}'s \code{\link{print}}
+#'   method), the key is not included in the underlying SQL query's ORDER BY
+#'   clause. However, the result set is sorted locally to resepct the key. This
+#'   behavior is referred to as a \emph{non-strict} evaluation of the key and
+#'   the printed output labels the key \code{(non-strict)}. To override the
+#'   default behavior for a single preview, call \code{print} explicitly and
+#'   provide the optional argument \code{strict = TRUE}. To change the default
+#'   behavior, set the option \code{dbitable.print.strict} to \code{TRUE}.
+#'
+#'   Non-strict evaluation of keys reduces the time taken to retrieve the
+#'   preview.
 #'
 #' @examples
 #'   # open a connection to the Chinook example database using duckdb
@@ -44,7 +111,7 @@
 #'   # 'id' can also be 'SQL'; use the same DBI connection as Album
 #'   Genre <- dbi.table(Album, DBI::SQL("chinook_duckdb.main.Genre"))
 #'
-#'   # use the extract (\code{[}) method to subset the dbi.table
+#'   # use the extract ([...]) method to subset the dbi.table
 #'   Album[AlbumId < 5, .(Title, nchar = paste(nchar(Title), "characters"))]
 #'
 #'   # use csql to see the underlying SQL query
@@ -55,7 +122,8 @@
 #'   \dontshow{DBI::dbDisconnect(duck)}
 #'
 #' @export
-dbi.table <- function(conn, id) {
+dbi.table <- function(conn, id, check.names = FALSE, key = NULL,
+                      stringsAsFactors = FALSE) {
   conn <- get_connection(conn)
 
   if (inherits(id, "SQL")) {
@@ -66,20 +134,23 @@ dbi.table <- function(conn, id) {
     id <- DBI::Id(id)
   }
 
-  if (inherits(id, "Id")) {
-    id <- check_id(id)
+  x <- new_dbi_table(conn, id, key = key, stringsAsFactors = stringsAsFactors)
+
+  if (isTRUE(check.names)) {
+    names(x) <- make.names(names(x), unique = TRUE)
   }
 
-  new_dbi_table(conn, id)
+  x
 }
 
 
 
-new_dbi_table <- function(conn, id, fields = NULL) {
+new_dbi_table <- function(conn, id, fields = NULL, key = NULL,
+                          stringsAsFactors = FALSE) {
   if (inherits(id, "Id")) {
     id_name <- id@name[[length(id@name)]]
   } else {
-    id_name <- DBI::dbUnquoteIdentifier(dbi_connection(conn), id)[[1L]]@name
+    id_name <- DBI::dbUnquoteIdentifier(conn, id)[[1L]]@name
     id_name <- id_name[[length(id_name)]]
   }
 
@@ -93,30 +164,60 @@ new_dbi_table <- function(conn, id, fields = NULL) {
                             on = I(list(NULL)))
 
   if (is.null(fields)) {
-    fields <- DBI::dbListFields(dbi_connection(conn), id)
+    fields <- DBI::dbListFields(conn, id)
   }
 
   internal_name <- paste0(session$key_base, seq_len(length(fields)))
 
-  x <- names_list(internal_name, copy_vector(fields))
+  x <- names_list(internal_name, fields)
 
   fields <- data.frame(internal_name = internal_name,
                        id_name = id_name,
                        field = fields)
 
-  dbi_table_object(x, conn, data_source, fields)
+  dbi_table_object(cdefs = x, conn = conn, data_source = data_source,
+                   fields = fields, key = key,
+                   stringsAsFactors = stringsAsFactors)
 }
 
 
 
-dbi_table_object <- function(cdefs, conn, data_source, fields,
-                             distinct = FALSE, where = list(),
-                             group_by = list(), order_by = list(),
-                             ctes = list()) {
+dbi_table_object <- function(cdefs, conn, data_source, fields, key = NULL,
+                             distinct = FALSE, where = NULL, group_by = NULL,
+                             order_by = NULL, ctes = NULL,
+                             stringsAsFactors = FALSE) {
+  names(cdefs) <- copy_vector(names(cdefs))
 
-  structure(cdefs, conn = conn, data_source = data_source, fields = fields,
-            distinct = distinct, where = where, group_by = group_by,
-            order_by = order_by, ctes = ctes, class = "dbi.table")
+  attr(cdefs, "conn") <- conn
+  attr(cdefs, "data_source") <- data_source
+  attr(cdefs, "fields") <- fields
+
+  if (length(key)) {
+    attr(cdefs, "sorted") <- copy_vector(key)
+  }
+
+  attr(cdefs, "distinct") <- distinct
+
+  if (length(where)) {
+    attr(cdefs, "where") <- where
+  }
+
+  if (length(group_by)) {
+    attr(cdefs, "group_by") <- group_by
+  }
+
+  if (length(order_by)) {
+    attr(cdefs, "order_by") <- order_by
+  }
+
+  if (length(ctes)) {
+    attr(cdefs, "ctes") <- ctes
+  }
+
+  attr(cdefs, "stringsAsFactors") <- stringsAsFactors
+
+  class(cdefs) <- "dbi.table"
+  cdefs
 }
 
 
@@ -129,6 +230,12 @@ get_data_source <- function(x) {
 
 get_fields <- function(x) {
   attr(x, "fields", exact = TRUE)
+}
+
+
+
+get_key <- function(x) {
+  attr(x, "sorted", exact = TRUE)
 }
 
 
@@ -163,6 +270,31 @@ get_ctes <- function(x) {
 
 
 
+get_stringsAsFactors <- function(x) {
+  attr(x, "stringsAsFactors", exact = TRUE)
+}
+
+
+
+#' @export
+"names<-.dbi.table" <- function(x, value) {
+  value <- as.character(value)
+
+  if ((nn <- length(value)) != (nc <- length(x))) {
+    stop("Can't assign ", nn, " names to a ", nc, "-column dbi.table",
+         call. = FALSE)
+  }
+
+  if (length(x_key <- get_key(x))) {
+    attr(x, "sorted") <- value[match(x_key, names(x))]
+  }
+
+  attr(x, "names") <- value
+  x
+}
+
+
+
 #' @rdname as.dbi.table
 #' @name as.dbi.table
 #'
@@ -179,29 +311,72 @@ print.dbi.table <- function(x, ...) {
     return(invisible(x))
   }
 
-  ans <- as.data.frame(x, n = 6)
-  classes <- display_class(ans)
+  opts <- list(topn = getOption("datatable.print.topn", 5L),
+               class = getOption("datatable.print.class", TRUE),
+               print.keys = getOption("datatable.print.keys", TRUE),
+               strict = getOption("dbitable.print.strict", FALSE))
+
+  dots <- list(...)
+  idx <- intersect(names(dots), names(opts))
+  opts[idx] <- dots[idx]
+
+  if (length(n <- as.integer(opts$topn)) == 1L && !is.na(n)) {
+    n <- max(1L, n)
+  } else {
+    n <- 5L
+  }
+
+  print.keys <- opts$print.keys
+  print.class <- opts$class
+  strict <- opts$strict
+
+  if (nrow(ans <- as.data.frame(x, n = n + 1L, strict = strict)) > n) {
+    ans <- ans[seq_len(n), , drop = FALSE]
+    print_continue <- TRUE
+  } else {
+    print_continue <- FALSE
+  }
+
+  if (length(x_key <- get_key(x)) && !strict) {
+    o <- as.call(c(as.name("order"),
+                   lapply(x_key, as.name),
+                   list(na.last = FALSE)))
+    o <- eval(o, envir = ans)
+    ans <- ans[o, , drop = FALSE]
+  }
 
   m <- as.matrix(format(ans))
-  m <- rbind(classes, m)
-  dimnames(m)[[1L]] <- rep.int("", nrow(m))
 
-  cat(paste0("<", db_short_name(dbi_connection(x)), ">"),
+  if (isTRUE(print.class)) {
+    classes <- display_class(ans)
+    m <- rbind(classes, m)
+  }
+
+  cat(paste0("<", db_short_name(x), ">"),
       paste(get_data_source(x)$id_name, collapse = " + "),
       "\n")
 
-  if (nrow(m) > 6L) {
-    print(m[1:6, , drop = FALSE], quote = FALSE, right = TRUE)
-    cat(" ---\n")
-  } else if (nrow(m) > 1L) {
-    print(m, quote = FALSE, right = TRUE)
-  } else {
+  if (isTRUE(print.keys) && length(x_key)) {
+    pre <- "Key"
+    if (!strict) {
+      pre <- paste(pre, "(non-strict)")
+    }
+    cat(paste0(pre, ": <", paste(x_key, collapse = ", "), ">\n"))
+  }
+
+  if (nrow(ans) < 1L) {
     m <- paste("Empty dbi.table (0 rows and", length(ans), "cols):",
                paste(names(ans), collapse = ","))
     if (nchar(m) > (width <- getOption("width", 80L))) {
       m <- paste0(substring(m, 1L, width - 3L), "...")
     }
     cat(m, "\n", sep = "")
+  } else {
+    dimnames(m)[[1L]] <- rep.int("", nrow(m))
+    print(m, quote = FALSE, right = TRUE)
+    if (print_continue) {
+      cat(" ---\n")
+    }
   }
 
   invisible(x)
@@ -243,7 +418,7 @@ print.dbi.table <- function(x, ...) {
 #'   \code{n} argument). To override this limit, either call
 #'   \code{as.data.frame} and provide the \code{n} argument (e.g., \code{n = -1}
 #'   to return the entire result set), or set the option
-#'   \code{dbi_table_max_fetch} to the desired default value of \code{n}.
+#'   \code{dbitable.max.fetch} to the desired default value of \code{n}.
 #'
 #' @seealso
 #'   \code{\link[base]{as.data.frame}} (the generic method in the
@@ -265,50 +440,22 @@ print.dbi.table <- function(x, ...) {
 #'
 #' @export
 as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
-                                    n = getOption("dbi_table_max_fetch",
+                                    n = getOption("dbitable.max.fetch",
                                                   10000L)) {
-  res <- try(DBI::dbSendStatement(dbi_connection(x),
-                                  write_select_query(x, n)),
-             silent = TRUE)
-
-  if (inherits(res, "DBIResult")) {
-    on.exit(DBI::dbClearResult(res))
+  if (is.null(strict <- list(...)$strict)) {
+    strict <- TRUE
+  } else {
+    strict <- as.logical(strict)
   }
 
-  if (inherits(res, "try-error")) {
-    is_valid <- DBI::dbIsValid(conn <- dbi_connection(x))
+  result_set <- DBI::dbGetQuery(x, write_select_query(x, n, strict))
 
-    if (is_valid) {
-      simple_query_works <- try(DBI::dbGetQuery(conn, "SELECT 1;"),
-                                silent = TRUE)
-      is_valid <- !inherits(simple_query_works, "try-error")
-    } else {
-      stop(attr(res, "condition"))
-    }
-
-    if (is_valid) {
-      stop(attr(res, "condition"))
-    }
-
-    if (is.environment(e <- get_connection(x))) {
-      conn <- e$.dbi_connection
-      if (!is.null(recon <- attr(conn, "recon", exact = TRUE))) {
-        e$.dbi_connection <- init_connection(recon)
-      } else {
-        stop(attr(res, "condition"))
-      }
-    }
-
-    res <- DBI::dbSendStatement(dbi_connection(x), write_select_query(x, n))
-
-    if (inherits(res, "DBIResult")) {
-      on.exit(DBI::dbClearResult(res))
-    } else {
-      stop(attr(res, "condition"))
-    }
+  if (isTRUE(get_stringsAsFactors(x))) {
+    f_idx <- vapply(result_set, is.character, FALSE)
+    result_set[f_idx] <- lapply(result_set[f_idx], factor)
   }
 
-  DBI::dbFetch(res, n = n)
+  result_set
 }
 
 
@@ -353,6 +500,12 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
 #'   literal numeric vector of integer values indexing the columns of \code{x}.
 #'   Use \code{by} to control grouping when evaluating \code{j}.
 #'
+#' @param keyby
+#'   Same as \code{by}, but additionally sets the key of the resulting
+#'   \code{dbi.table} to the columns provided in \code{by}. May also be
+#'   \code{TRUE} or \code{FALSE} when \code{by} is provided as an alternative
+#'   way to accomplish the same operation.
+#'
 #' @param nomatch
 #'   Either \code{NA} or \code{NULL}.
 #'
@@ -381,7 +534,7 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
 #'   }
 #'
 #' @export
-"[.dbi.table" <- function(x, i, j, by, nomatch = NA, on = NULL) {
+"[.dbi.table" <- function(x, i, j, by, keyby, nomatch = NA, on = NULL) {
   x_sub <- substitute(x)
   parent <- parent.frame()
 
@@ -408,10 +561,25 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
 
   stopifnot(is.null(i) || is.call(i) || is.dbi.table(i))
 
-  if (missing(by)) {
+  by_missing <- (missing(by) && missing(keyby))
+  if (by_missing || missing(j)) {
+    if (!by_missing) {
+      warning("ignoring by/keyby because 'j' is not supplied")
+    }
     by <- NULL
+    keyby <- FALSE
   } else {
-    by <- preprocess_by(substitute(by), x, parent, !missing(j))
+    if (missing(by)) {
+      by <- preprocess_by(substitute(keyby), x, parent, !missing(j))
+      keyby <- TRUE
+    } else {
+      by <- preprocess_by(substitute(by), x, parent, !missing(j))
+      if (missing(keyby)) {
+        keyby <- FALSE
+      } else if (!is.logical(keyby) || (length(keyby) != 1L)) {
+        stop("when by and keyby are both provided, keyby must be TRUE or FALSE")
+      }
+    }
   }
 
   if (missing(j)) {
@@ -422,7 +590,7 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
 
   sub_on <- substitute(on)
   if (!is.null(sub_on)) {
-    on <- try(eval(on, envir = parent), silent = TRUE)
+    on <- stry(eval(on, envir = parent))
     if (inherits(on, "try-error")) {
       on <- sub_on
     }
@@ -436,7 +604,7 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
   }
 
   if (is_call_to(j) == ":=") {
-    return(handle_colon_equal(x, i, j, by, parent, x_sub))
+    return(handle_the_walrus(x, i, j, by, parent, x_sub))
   }
 
   if (is.dbi.table(i)) {
@@ -508,16 +676,17 @@ unique.dbi.table <- function(x, incomparables = FALSE, ...) {
 #' @export
 as.dbi.table <- function(conn, x, type = c("auto", "query", "temporary")) {
   conn <- get_connection(conn)
+  x_key <- get_key(x)
   x <- as.data.frame(x)
   n <- nrow(x)
   type <- match.arg(type)
 
   if (type == "temporary") {
-    return(temporary_dbi_table(conn, x))
+    return(temporary_dbi_table(conn, x, key = x_key))
   }
 
   if (type == "query") {
-    return(in_query_cte(conn, x))
+    return(in_query_cte(conn, x, key = x_key))
   }
 
   if (n > getOption("dbi_table_max_in_query", 500L)) {
@@ -528,7 +697,7 @@ as.dbi.table <- function(conn, x, type = c("auto", "query", "temporary")) {
       return(in_query_cte(conn, x))
     }
 
-    if (is.dbi.table(tmp <- try(temporary_dbi_table(conn, x), silent = TRUE))) {
+    if (is.dbi.table(tmp <- stry(temporary_dbi_table(conn, x, key = x_key)))) {
       return(tmp)
     }
 
@@ -541,27 +710,33 @@ as.dbi.table <- function(conn, x, type = c("auto", "query", "temporary")) {
             "will fail if statement is too large")
   }
 
-  in_query_cte(conn, x)
+  in_query_cte(conn, x, key = x_key)
 }
 
 
 
-temporary_dbi_table <- function(conn, x) {
-  dbi_conn <- dbi_connection(conn)
-  stopifnot(inherits(dbi_conn, "DBIConnection"))
+temporary_dbi_table_name <- function(conn) {
+  UseMethod("temporary_dbi_table_name", dbi_connection(conn))
+}
 
-  temp_name <- unique_table_name(session$tmp_base)
 
-  if (inherits(dbi_conn, "Microsoft SQL Server")) {
-    temp_name <- paste0("#", temp_name)
-  }
 
-  if (!DBI::dbWriteTable(dbi_conn, temp_name, x, temporary = TRUE)) {
+#' @rawNamespace S3method(temporary_dbi_table_name,default,temporary_dbi_table_name_default)
+temporary_dbi_table_name_default <- function(conn) {
+  unique_table_name(session$tmp_base)
+}
+
+
+
+temporary_dbi_table <- function(conn, x, key = NULL) {
+  temp_name <- temporary_dbi_table_name(conn)
+
+  if (!DBI::dbWriteTable(conn, temp_name, x, temporary = TRUE)) {
     stop("could not create temporary table - permission denied")
   }
 
   temp_id <- DBI::Id(temp_name)
-  x <- new_dbi_table(conn, temp_id, names(x))
+  x <- new_dbi_table(conn, temp_id, names(x), key)
 
   temp_dbi_table <- new.env(parent = emptyenv())
   temp_dbi_table$id <- temp_id
@@ -575,15 +750,14 @@ temporary_dbi_table <- function(conn, x) {
 
 
 finalize_temp_dbi_table <- function(e) {
-  try(DBI::dbRemoveTable(e$conn, e$id), silent = TRUE)
+  stry(DBI::dbRemoveTable(e$conn, e$id))
 
   NULL
 }
 
 
 
-in_query_cte <- function(conn, data) {
-  dbi_conn <- dbi_connection(conn)
+in_query_cte <- function(conn, data, key = NULL) {
   data <- as.data.frame(data)
 
   empty <- nrow(data) < 1L
@@ -594,9 +768,9 @@ in_query_cte <- function(conn, data) {
 
   cte_name <- unique_table_name("IN_QUERY_CTE")
   id <- DBI::Id(cte_name)
-  x <- new_dbi_table(conn, id, names(data))
+  x <- new_dbi_table(conn, id, names(data), key)
 
-  qnames <- DBI::dbQuoteIdentifier(dbi_conn, names(data))
+  qnames <- DBI::dbQuoteIdentifier(conn, names(data))
   col_modes <- vapply(data, storage.mode, "")
 
   if (empty) {
@@ -610,7 +784,7 @@ in_query_cte <- function(conn, data) {
                   data[[j]],
                   SIMPLIFY = FALSE,
                   USE.NAMES = FALSE)
-    tmp <- translate_sql_(tmp, dbi_conn)
+    tmp <- translate_sql_(tmp, con = conn)
     data[[j]] <- DBI::SQL(paste(tmp, "AS", qnames[[j]]))
   }
 

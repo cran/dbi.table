@@ -2,11 +2,10 @@
 old_opts <- options(width = 90)
 
 ## ----install, eval = FALSE--------------------------------------------------------------
-# #install.packages("devtools")
-# devtools::install_github("kjellpk/dbi.table")
+# install.packages("dbi.table")
 
 ## ----library, message = FALSE-----------------------------------------------------------
-library(data.table)
+library(data.table) #needed for as.data.table
 library(dbi.table)
 chinook <- chinook.duckdb()
 
@@ -30,17 +29,26 @@ csql(my_album)
 # ##   R:                 i                 j        by
 # ## SQL:  where | order by   select | update  group by
 
-## ----i_where----------------------------------------------------------------------------
+## ----i_where_query----------------------------------------------------------------------
 csql(my_album[AlbumId == ArtistId + 1])
 
-## ----i_order----------------------------------------------------------------------------
+## ----i_where----------------------------------------------------------------------------
+my_album[AlbumId == ArtistId + 1]
+
+## ----i_order_query----------------------------------------------------------------------
 csql(my_album[order(nchar(Title), -AlbumId)])
 
+## ----i_order----------------------------------------------------------------------------
+my_album[order(nchar(Title), -AlbumId)]
+
 ## ----j_list-----------------------------------------------------------------------------
-csql(my_album[, .(AlbumId, Title)])
+my_album[, .(AlbumId, Title)]
+
+## ----by_list_query----------------------------------------------------------------------
+csql(my_album[, .("# of Albums" = .N), .(ArtistId)])
 
 ## ----by_list----------------------------------------------------------------------------
-csql(my_album[, .("# of Albums" = .N), .(ArtistId)])
+my_album[, .("# of Albums" = .N), .(ArtistId)]
 
 ## ----dbi.attach-------------------------------------------------------------------------
 dbi.attach(chinook)
@@ -61,7 +69,7 @@ ls("duckdb:chinook_duckdb")
 csql(merge(Album, Artist, by = "ArtistId"))
 
 ## ----merge_no_by------------------------------------------------------------------------
-csql(merge(Album, Artist))
+csql(merge(Customer, Employee))
 
 ## ----merge_no_y-------------------------------------------------------------------------
 csql(merge(Track))
@@ -77,9 +85,6 @@ catalog
 
 ## ----dbi_catalog_table------------------------------------------------------------------
 catalog$main$Album
-
-## ----dbi_catalog_merge------------------------------------------------------------------
-merge(catalog$main$Album)
 
 ## ----scope_example----------------------------------------------------------------------
 x <- dbi.table(chinook, DBI::Id("Album"))

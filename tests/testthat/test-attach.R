@@ -1,57 +1,49 @@
-test_that("dbi.attach works", {
+test_that("dbi.attach works on SQLite", {
+  expect_no_error(dbi.attach(chinook.sqlite, pos = 2L))
+  expect_type(e <- as.environment(2L), type = "environment")
+  expect_s3_class(e[["../catalog"]], "dbi.catalog")
+  expect_vector(s <- ls(e), ptype = character())
+  expect_true(all(unlist(eapply(e, is.dbi.table))))
 
-  dbs <- list(SQLite = chinook.sqlite,
-              duckdb = chinook.duckdb)
+  # Using the walrus on a dbi.table in an attached schema should assign the
+  # result in the calling frame (typically .GlobalEnv). It should not modify
+  # the dbi.table in the attached schema.
 
-  for (d in dbs) {
-    expect_no_error(dbi.attach(d, pos = 2L))
-    expect_type(e <- as.environment(2L), type = "environment")
-    expect_s3_class(e[["../catalog"]], "dbi.catalog")
-    expect_vector(s <- ls(e), ptype = character())
-    expect_true(all(unlist(eapply(e, is.dbi.table))))
-    expect_warning(eval(quote(Album[, z := 42]), envir = e))
-    expect_silent(detach(2L))
+  test_fun <- function() {
+    Genre[, z := 42]
+    names(Genre)
   }
 
-  skip_on_cran()
-  #skip_if_offline() #Borks in github Actions, adding curl package didn't help
+  expect_identical(test_fun(), c(names(Genre), "z"))
 
-  rna <- function() {
-    DBI::dbConnect(RPostgres::Postgres(),
-                   user = "reader",
-                   password = "NWDMCE5xdipIjRrp",
-                   host = "hh-pgsql-public.ebi.ac.uk",
-                   port = 5432L,
-                   dbname = "pfmegrnargs")
-  }
+  expect_true("Genre" %notin% ls())
+  expect_s3_class(Genre[, z := 42], "dbi.table")
+  expect_true("Genre" %in% ls())
 
-  expect_no_error(e <- dbi.attach(rna)) #works b/c only 1 schema
-  expect_true(identical(as.environment(2L), e))
-  expect_equal(length(ls(e[["../catalog"]])), 3L)
-  expect_true("information_schema" %in% ls(e[["../catalog"]]))
-  expect_true("rnacen" %in% ls(e[["../catalog"]]))
   expect_silent(detach(2L))
+})
 
-  expect_no_error(e <- dbi.attach(rna, schema = "rnacen"))
-  expect_true(identical(as.environment(2L), e))
-  expect_equal(length(ls(e[["../catalog"]])), 2L)
-  expect_true("information_schema" %in% ls(e[["../catalog"]]))
-  expect_true("rnacen" %in% ls(e[["../catalog"]]))
-  expect_silent(detach(2L))
+test_that("dbi.attach works on DuckDB", {
+  expect_no_error(dbi.attach(chinook.duckdb, pos = 2L))
+  expect_type(e <- as.environment(2L), type = "environment")
+  expect_s3_class(e[["../catalog"]], "dbi.catalog")
+  expect_vector(s <- ls(e), ptype = character())
+  expect_true(all(unlist(eapply(e, is.dbi.table))))
 
-  rdo <- function() {
-    DBI::dbConnect(RMariaDB::MariaDB(),
-                   user = "guest",
-                   password = "ctu-relational",
-                   host = "relational.fel.cvut.cz",
-                   port = 3306)
+  # Using the walrus on a dbi.table in an attached schema should assign the
+  # result in the calling frame (typically .GlobalEnv). It should not modify
+  # the dbi.table in the attached schema.
+
+  test_fun <- function() {
+    Genre[, z := 42]
+    names(Genre)
   }
 
-  expect_error(e <- dbi.attach(rdo)) #since not interactive / multiple schemas
-  expect_no_error(e <- dbi.attach(rdo, schema = "Chinook"))
-  expect_true(identical(as.environment(2L), e))
-  expect_equal(length(ls(e[["../catalog"]])), 2L)
-  expect_true("information_schema" %in% ls(e[["../catalog"]]))
-  expect_true("Chinook" %in% ls(e[["../catalog"]]))
+  expect_identical(test_fun(), c(names(Genre), "z"))
+
+  expect_true("Genre" %notin% ls())
+  expect_s3_class(Genre[, z := 42], "dbi.table")
+  expect_true("Genre" %in% ls())
+
   expect_silent(detach(2L))
 })

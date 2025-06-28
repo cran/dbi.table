@@ -349,17 +349,13 @@ catalogs.</p>
 database connection using the <code>DBI</code> package.</p>
 <div id="installation" class="section level1" number="1">
 <h1><span class="header-section-number">1</span> Installation</h1>
-<p>The <code>dbi.table</code> package is hosted on GitHub. Use the
-following command to install the package.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co">#install.packages(&quot;devtools&quot;)</span></span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">&quot;kjellpk/dbi.table&quot;</span>)</span></code></pre></div>
-<p>Note: if the <code>install_github</code> function is not found, you
-will need to first install the <code>devtools</code> package using
-<code>install.packages</code>.</p>
+<p>If you haven’t alreay done so, install the <code>dbi.table</code>
+package from CRAN.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">install.packages</span>(<span class="st">&quot;dbi.table&quot;</span>)</span></code></pre></div>
 </div>
 <div id="getting-started" class="section level1" number="2">
 <h1><span class="header-section-number">2</span> Getting Started</h1>
-<p>This section uses the sample <a href="https://github.com/lerocha/chinook-database">Chinook Database</a>
+<p>This section uses the <a href="https://github.com/lerocha/chinook-database">Chinook Database</a>
 (included in the package) to demonstrate how to</p>
 <ol style="list-style-type: decimal">
 <li>create a single <code>dbi.table</code> using the
@@ -371,13 +367,13 @@ function, and</li>
 <li>load a database catalog using the <code>dbi.catalog</code>
 function.</li>
 </ol>
-<p>The function <code>chinook.duckdb</code> that returns an open
+<p>The function <code>chinook.duckdb</code> returns an open
 <code>duckdb</code> (DBI) connection to the sample Chinook Database.
 This connection is a typical DBI connection as returned by
 <code>DBI::dbConnect</code> that can be used as the <code>conn</code>
 argument in DBI package functions. Let’s get started by loading the
 package and opening the connection.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(data.table)</span>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(data.table) <span class="co">#needed for as.data.table</span></span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">library</span>(dbi.table)</span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>chinook <span class="ot">&lt;-</span> <span class="fu">chinook.duckdb</span>()</span></code></pre></div>
 <div id="create-a-single-dbi.table" class="section level2" number="2.1">
@@ -387,7 +383,7 @@ package and opening the connection.</p>
 connection, and an Id indentifying a database table or view.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>my_album <span class="ot">&lt;-</span> <span class="fu">dbi.table</span>(chinook, DBI<span class="sc">::</span><span class="fu">Id</span>(<span class="st">&quot;Album&quot;</span>))</span></code></pre></div>
 <p>The object <code>my_album</code> is a <code>dbi.table</code>, a data
-structure that represents a SQL query (which we refer to as the
+structure that represents an SQL query (which we refer to as the
 <code>dbi.table</code>’s <em>underlying SQL query</em>). The
 <code>print</code> method displays a preview of the underlying SQL
 query.</p>
@@ -408,9 +404,8 @@ two notable exceptions.</p>
 <li><p>The row numbers are omitted. SQL queries do not necessarily
 return the result set in a reliable order (even on subsequent
 evaluations of the same query), and <code>dbi.table</code> does not make
-any extra effort to order the rows by default. Thus the row numbers are
-omitted.</p></li>
-<li><p>Only 5 rows of the <code>dbi.table</code> are displayed
+any extra effort to order the rows by default.</p></li>
+<li><p>Only the first 5 rows of the <code>dbi.table</code> are displayed
 (<code>data.table</code> displays the first 5 and the last 5). Again,
 since the result set does not have a reliable order, it is not possible
 to say which rows are the first and which are the last. The rows
@@ -418,7 +413,7 @@ displayed are the first 5 returned by the RDBMS.</p></li>
 </ol>
 <p>The function <code>as.data.table</code> executes the
 <code>dbi.table</code>’s underlying SQL query and retrieves the result
-set as a <code>data.table</code>. Pro tip: calling the extracts method
+set as a <code>data.table</code>. Pro tip: calling the extract method
 (<code>[]</code>) with no arguments is a shortcut for
 <code>as.data.table</code>.</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co">#as.data.table(my_album)</span></span>
@@ -439,12 +434,13 @@ set as a <code>data.table</code>. Pro tip: calling the extracts method
 <p>Since the result set is instantiated locally as a
 <code>data.table</code>, the row numbers and the last 5 rows are
 displayed.</p>
-<p>Note: by default, <code>as.data.table</code> (and the empty extracts
-shortcut) fetch a maximum of 10,000 rows. To override this limit, either
-set the option <code>dbi_table_max_fetch</code> or call
+<p>Note: by default, <code>as.data.table</code> (and its <code>[]</code>
+shortcut) fetches a maximum of 10,000 rows. To override this limit,
+either set the option <code>dbitable.max.fetch</code> or call
 <code>as.data.table</code> and provide the <code>n</code> argument
 (e.g., <code>n = -1</code> to fetch the entire result set).</p>
-<p>The <code>csql</code> utility displays the query.</p>
+<p>Lastly, the <code>csql</code> function displays the
+<code>dbi.table</code>’s underlying SQL query.</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">csql</span>(my_album)</span></code></pre></div>
 <pre><code>## SELECT Album.AlbumId AS AlbumId,
 ##        Album.Title AS Title,
@@ -459,7 +455,7 @@ selects all the columns from the database table.</p>
 <div id="manipulate-a-dbi.table-using-data.table-syntax" class="section level2" number="2.2">
 <h2><span class="header-section-number">2.2</span> Manipulate a
 <code>dbi.table</code> using <code>data.table</code> Syntax</h2>
-<p>This table from <code>data.table</code>’s <em>Introduction to
+<p>This extract from <code>data.table</code>’s <em>Introduction to
 data.table</em> vignette pretty much sums up what <code>dbi.table</code>
 does.</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>DT[i, j, by]</span>
@@ -468,15 +464,12 @@ does.</p>
 <span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="do">## SQL:  where | order by   select | update  group by</span></span></code></pre></div>
 <p>In general, <code>dbi.table</code> should be able to handle basic
 <code>data.table</code> syntax. SQL translation is done by
-<code>dbplyr::translate_sql_</code> which works with a wide variety of R
+<code>dbplyr::translate_sql_</code> which works with a variety of R
 functions. However, complicated expressions (e.g., custom functions in
 <code>j</code>, nested aggregation functions, most special symbols) do
 not work.</p>
 <p>Best practice is to use <code>dbi.table</code> to subset and wrangle
 on the database, then <code>data.table</code> to fine tune locally.</p>
-<p>The remainder of this section demonstrates how <code>i</code>,
-<code>j</code>, and <code>by</code> manipulate a
-<code>dbi.table</code>’s underlying SQL query.</p>
 <p>When <code>i</code> is a logical expression of the variables in the
 <code>dbi.table</code> then it becomes the <em>WHERE</em> clause in the
 <code>dbi.table</code>’s underlying SQL query.</p>
@@ -490,10 +483,17 @@ on the database, then <code>data.table</code> to fine tune locally.</p>
 ##  WHERE Album.AlbumId = (Album.ArtistId + 1)
 ## 
 ##  LIMIT 10000</code></pre>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>my_album[AlbumId <span class="sc">==</span> ArtistId <span class="sc">+</span> <span class="dv">1</span>]</span></code></pre></div>
+<pre><code>## &lt;chinook_duckdb&gt; Album 
+##  AlbumId               Title ArtistId
+##    &lt;int&gt;              &lt;char&gt;    &lt;int&gt;
+##        3   Restless and Wild        2
+##       59 Deep Purple In Rock       58
+##       88            Faceless       87</code></pre>
 <p>When <code>i</code> is a call to <code>order</code> (or
-<code>forder</code>), it becomes the <em>ORDER BY</em> clause in the
+<code>chorder</code>), it becomes the <em>ORDER BY</em> clause in the
 <code>dbi.table</code>’s underlying SQL query.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">csql</span>(my_album[<span class="fu">order</span>(<span class="fu">nchar</span>(Title), <span class="sc">-</span>AlbumId)])</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">csql</span>(my_album[<span class="fu">order</span>(<span class="fu">nchar</span>(Title), <span class="sc">-</span>AlbumId)])</span></code></pre></div>
 <pre><code>## SELECT Album.AlbumId AS AlbumId,
 ##        Album.Title AS Title,
 ##        Album.ArtistId AS ArtistId
@@ -503,20 +503,33 @@ on the database, then <code>data.table</code> to fine tune locally.</p>
 ##  ORDER BY LENGTH(Album.Title), Album.AlbumId DESC
 ## 
 ##  LIMIT 10000</code></pre>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>my_album[<span class="fu">order</span>(<span class="fu">nchar</span>(Title), <span class="sc">-</span>AlbumId)]</span></code></pre></div>
+<pre><code>## &lt;chinook_duckdb&gt; Album 
+##  AlbumId  Title ArtistId
+##    &lt;int&gt; &lt;char&gt;    &lt;int&gt;
+##      131     IV       22
+##      239    War      150
+##      236    Pop      150
+##      182    Vs.      118
+##      181    Ten      118
+##  ---</code></pre>
 <p>When <code>j</code> is a list of expressions of the variables in the
 <code>dbi.table</code>, then <code>j</code> becomes the <em>SELECT</em>
 clause in the <code>dbi.table</code>’s underlying SQL query.</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">csql</span>(my_album[, .(AlbumId, Title)])</span></code></pre></div>
-<pre><code>## SELECT Album.AlbumId AS AlbumId,
-##        Album.Title AS Title
-## 
-##   FROM Album AS Album
-## 
-##  LIMIT 10000</code></pre>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>my_album[, .(AlbumId, Title)]</span></code></pre></div>
+<pre><code>## &lt;chinook_duckdb&gt; Album 
+##  AlbumId                                 Title
+##    &lt;int&gt;                                &lt;char&gt;
+##        1 For Those About To Rock We Salute You
+##        2                     Balls to the Wall
+##        3                     Restless and Wild
+##        4                     Let There Be Rock
+##        5                              Big Ones
+##  ---</code></pre>
 <p>When <code>by</code> is a list of expressions of the variables in the
 <code>dbi.table</code>, then <code>by</code> becomes the <em>GROUP
 BY</em> clause in the <code>dbi.table</code>’s underlying SQL query.</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">csql</span>(my_album[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)])</span></code></pre></div>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">csql</span>(my_album[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)])</span></code></pre></div>
 <pre><code>## SELECT Album.ArtistId AS ArtistId,
 ##        COUNT(*) AS &quot;# of Albums&quot;
 ## 
@@ -525,38 +538,53 @@ BY</em> clause in the <code>dbi.table</code>’s underlying SQL query.</p>
 ##  GROUP BY Album.ArtistId
 ## 
 ##  LIMIT 10000</code></pre>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>my_album[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)]</span></code></pre></div>
+<pre><code>## &lt;chinook_duckdb&gt; Album 
+##  ArtistId # of Albums
+##     &lt;int&gt;       &lt;num&gt;
+##         1           2
+##         2           2
+##         3           1
+##         4           1
+##         5           1
+##  ---</code></pre>
 </div>
 <div id="attach-a-schema-to-the-search-path" class="section level2" number="2.3">
 <h2><span class="header-section-number">2.3</span> Attach a Schema to
 the Search Path</h2>
 <p>The <code>dbi.attach</code> function <em>attaches</em> a DBI
-connection to the search path. That is, <code>dbi.attach</code> creates
-a <code>dbi.table</code> for each table and each view in the schema
+connection to the search path. This means that <code>dbi.attach</code>
+creates a <code>dbi.table</code> for each table and view in the schema
 associated with the DBI connection, then assigns these
 <code>dbi.table</code>s to an environment on the search path.</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">dbi.attach</span>(chinook)</span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">dbi.attach</span>(chinook)</span></code></pre></div>
 <p>A quick look at the search path shows the database attached in
 position 2.</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">head</span>(<span class="fu">search</span>(), <span class="dv">3</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="fu">head</span>(<span class="fu">search</span>(), <span class="dv">3</span>)</span></code></pre></div>
 <pre><code>## [1] &quot;.GlobalEnv&quot;            &quot;duckdb:chinook_duckdb&quot; &quot;package:dbi.table&quot;</code></pre>
 <p>The tables and views in the database schema are queriable as
 <code>dbi.table</code>s in the attached environment
 duckdb:chinook_duckdb.</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="fu">ls</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="fu">ls</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span></code></pre></div>
 <pre><code>##  [1] &quot;Album&quot;         &quot;Artist&quot;        &quot;Customer&quot;      &quot;Employee&quot;      &quot;Genre&quot;        
 ##  [6] &quot;Invoice&quot;       &quot;InvoiceLine&quot;   &quot;MediaType&quot;     &quot;Playlist&quot;      &quot;PlaylistTrack&quot;
 ## [11] &quot;Track&quot;</code></pre>
 <p>Note: Attaching a DBI connection is intended for an interactive
 exploratory analysis of a database (schema). For programatic use cases,
 see the <em>Load a Database Catalog</em> section.</p>
-<p>Merging two <code>dbi.table</code>s results in a SQL join that
-describes the same result set as the associated <code>data.table</code>
-merge. That is,</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="fu">merge</span>(<span class="fu">as.data.table</span>(Album), <span class="fu">as.data.table</span>(Artist), <span class="at">by =</span> <span class="st">&quot;ArtistId&quot;</span>)</span></code></pre></div>
+<div id="merging-dbi.tables" class="section level3" number="2.3.1">
+<h3><span class="header-section-number">2.3.1</span> Merging
+<code>dbi.table</code>s</h3>
+<p>Two <code>dbi.table</code>s that share the same connection (for
+example, all the <code>dbi.table</code>s in an attached schema share the
+same connection) can be merged. Merging two <code>dbi.table</code>s
+results in an SQL join that describes the same result set as the
+associated <code>data.table</code> merge. That is,</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">merge</span>(<span class="fu">as.data.table</span>(Album), <span class="fu">as.data.table</span>(Artist), <span class="at">by =</span> <span class="st">&quot;ArtistId&quot;</span>)</span></code></pre></div>
 <p>and</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">as.data.table</span>(<span class="fu">merge</span>(Album, Artist, <span class="at">by =</span> <span class="st">&quot;ArtistId&quot;</span>))</span></code></pre></div>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a><span class="fu">as.data.table</span>(<span class="fu">merge</span>(Album, Artist, <span class="at">by =</span> <span class="st">&quot;ArtistId&quot;</span>))</span></code></pre></div>
 <p>are the same <code>data.table</code> up to row order.</p>
-<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Album, Artist, <span class="at">by =</span> <span class="st">&quot;ArtistId&quot;</span>))</span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Album, Artist, <span class="at">by =</span> <span class="st">&quot;ArtistId&quot;</span>))</span></code></pre></div>
 <pre><code>## SELECT Album.ArtistId AS ArtistId,
 ##        Album.AlbumId AS AlbumId,
 ##        Album.Title AS Title,
@@ -568,45 +596,72 @@ merge. That is,</p>
 ##     ON Album.ArtistId = Artist.ArtistId
 ## 
 ##  LIMIT 10000</code></pre>
-<p>When a DBI connection is attached to the search path,
-<code>dbi.attach</code> also loads the schema’s relational meta data
-(whether this works depends on how the underlying database implments an
-<em>information schema</em>). In particular, <em>foreign key</em>
-constraints are used as the default <code>by</code> when merging. In the
-previous example, the <code>ArtistId</code> column is a foreign key
-referencing the <code>Album</code> table. For this example, when the
-<code>by</code> argument is omitted, <code>dbi.table</code> still merges
-<em>by</em> <code>ArtistId</code>.</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Album, Artist))</span></code></pre></div>
-<pre><code>## SELECT Album.ArtistId AS ArtistId,
-##        Album.AlbumId AS AlbumId,
-##        Album.Title AS Title,
-##        Artist.&quot;Name&quot; AS &quot;Name&quot;
+<p>If <code>dbi.table</code> can determine the <em>foreign key</em>
+constraints between <code>x</code> and <code>y</code>, and if there is
+only one foreign key (either <code>x</code> referring to <code>y</code>,
+or <code>y</code> referring to <code>x</code>), then this foreign key is
+used as the default <code>by</code> when merging. Otherwise,
+<code>dbi.table</code> uses the same algorithm to determine the default
+<code>by</code> columns as <code>data.table</code>.</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Customer, Employee))</span></code></pre></div>
+<pre><code>## SELECT Customer.SupportRepId AS SupportRepId,
+##        Customer.CustomerId AS CustomerId,
+##        Customer.PostalCode AS &quot;PostalCode.x&quot;,
+##        Customer.Address AS &quot;Address.x&quot;,
+##        Customer.Fax AS &quot;Fax.x&quot;,
+##        Customer.Email AS &quot;Email.x&quot;,
+##        Customer.City AS &quot;City.x&quot;,
+##        Customer.Country AS &quot;Country.x&quot;,
+##        Customer.FirstName AS &quot;FirstName.x&quot;,
+##        Customer.Phone AS &quot;Phone.x&quot;,
+##        Customer.Company AS Company,
+##        Customer.LastName AS &quot;LastName.x&quot;,
+##        Customer.State AS &quot;State.x&quot;,
+##        Employee.Fax AS &quot;Fax.y&quot;,
+##        Employee.Email AS &quot;Email.y&quot;,
+##        Employee.FirstName AS &quot;FirstName.y&quot;,
+##        Employee.HireDate AS HireDate,
+##        Employee.Address AS &quot;Address.y&quot;,
+##        Employee.Country AS &quot;Country.y&quot;,
+##        Employee.PostalCode AS &quot;PostalCode.y&quot;,
+##        Employee.Phone AS &quot;Phone.y&quot;,
+##        Employee.LastName AS &quot;LastName.y&quot;,
+##        Employee.ReportsTo AS ReportsTo,
+##        Employee.City AS &quot;City.y&quot;,
+##        Employee.Title AS Title,
+##        Employee.BirthDate AS BirthDate,
+##        Employee.State AS &quot;State.y&quot;
 ## 
-##   FROM chinook_duckdb.main.Album AS Album
+##   FROM chinook_duckdb.main.Customer AS Customer
 ## 
-##  INNER JOIN chinook_duckdb.main.Artist AS Artist
-##     ON Album.ArtistId = Artist.ArtistId
+##  INNER JOIN chinook_duckdb.main.Employee AS Employee
+##     ON Customer.SupportRepId = Employee.EmployeeId
 ## 
 ##  LIMIT 10000</code></pre>
+<p>In this case, the <code>Customer</code> table has a foreign key
+<code>SupportRepId</code> that refers to the <code>Employee</code>
+table’s primary key <code>EmployeeId</code>.</p>
 <p>When the <code>y</code> argument is omitted, <code>dbi.table</code>’s
-<code>merge</code> uses the foreign key constraints that reference
-<code>x</code> to determine the <code>y</code> (or <code>y</code>s) to
-merge with.</p>
-<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Track))</span></code></pre></div>
+<code>merge</code> uses the foreign key constraints that <code>x</code>
+references to determine the <code>y</code> (or <code>y</code>s) to merge
+with.</p>
+<p>When <code>y</code> is missing, <code>merge.dbi.table</code> merges
+with the tables referenced by <code>x</code>’s foreign keys (one merge
+for each foreign key).</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Track))</span></code></pre></div>
 <pre><code>## SELECT Track.MediaTypeId AS MediaTypeId,
 ##        Track.GenreId AS GenreId,
 ##        Track.AlbumId AS AlbumId,
 ##        Track.TrackId AS TrackId,
-##        Track.&quot;Name&quot; AS &quot;Name&quot;,
-##        Track.Composer AS Composer,
 ##        Track.&quot;Milliseconds&quot; AS &quot;Milliseconds&quot;,
+##        Track.Composer AS Composer,
 ##        Track.Bytes AS Bytes,
+##        Track.&quot;Name&quot; AS &quot;Name&quot;,
 ##        Track.UnitPrice AS UnitPrice,
-##        Album.Title AS &quot;Album.Title&quot;,
-##        Album.ArtistId AS &quot;Album.ArtistId&quot;,
-##        Genre.&quot;Name&quot; AS &quot;Genre.Name&quot;,
-##        MediaType.&quot;Name&quot; AS &quot;MediaType.Name&quot;
+##        Album.Title AS &quot;AlbumId.Title&quot;,
+##        Album.ArtistId AS &quot;AlbumId.ArtistId&quot;,
+##        Genre.&quot;Name&quot; AS &quot;GenreId.Name&quot;,
+##        MediaType.&quot;Name&quot; AS &quot;MediaTypeId.Name&quot;
 ## 
 ##   FROM chinook_duckdb.main.Track AS Track
 ## 
@@ -621,30 +676,45 @@ merge with.</p>
 ## 
 ##  LIMIT 10000</code></pre>
 <p>When the optional <code>recursive</code> argument is
-<code>TRUE</code>, <code>merge.dbi.table</code> recursively merges on
-each of the just-merged tables. In this example, <code>Track</code> has
+<code>TRUE</code>, <code>merge.dbi.table</code> calls <code>merge</code>
+with <code>recuresive = TRUE</code> on each referenced table and merges
+<code>x</code> with the result. In this example, <code>Track</code> has
 a foreign key that references <code>Album</code> and <code>Album</code>
-has a foreign key that references <code>Artist</code>.</p>
-<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Track, <span class="at">recursive =</span> <span class="cn">TRUE</span>))</span></code></pre></div>
-<pre><code>## SELECT Album.ArtistId AS &quot;Album.ArtistId&quot;,
-##        Track.MediaTypeId AS MediaTypeId,
+has a foreign key that references <code>Artist</code>. The columns from
+<code>Artist</code> are included in the result set when
+<code>merge</code> is called with <code>recuresive = TRUE</code>.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a><span class="fu">csql</span>(<span class="fu">merge</span>(Track, <span class="at">recursive =</span> <span class="cn">TRUE</span>))</span></code></pre></div>
+<pre><code>## WITH CTE2 AS (
+## SELECT Album.ArtistId AS &quot;AlbumId.ArtistId&quot;,
+##        Album.AlbumId AS &quot;AlbumId.AlbumId&quot;,
+##        Album.Title AS &quot;AlbumId.Title&quot;,
+##        Artist.&quot;Name&quot; AS &quot;AlbumId.ArtistId.Name&quot;
+## 
+##   FROM chinook_duckdb.main.Album AS Album
+## 
+##   LEFT OUTER JOIN chinook_duckdb.main.Artist AS Artist
+##     ON Album.ArtistId = Artist.ArtistId
+## )
+## 
+## SELECT Track.MediaTypeId AS MediaTypeId,
 ##        Track.GenreId AS GenreId,
 ##        Track.AlbumId AS AlbumId,
 ##        Track.TrackId AS TrackId,
-##        Track.&quot;Name&quot; AS &quot;Name&quot;,
-##        Track.Composer AS Composer,
 ##        Track.&quot;Milliseconds&quot; AS &quot;Milliseconds&quot;,
+##        Track.Composer AS Composer,
 ##        Track.Bytes AS Bytes,
+##        Track.&quot;Name&quot; AS &quot;Name&quot;,
 ##        Track.UnitPrice AS UnitPrice,
-##        Album.Title AS &quot;Album.Title&quot;,
-##        Genre.&quot;Name&quot; AS &quot;Genre.Name&quot;,
-##        MediaType.&quot;Name&quot; AS &quot;MediaType.Name&quot;,
-##        Artist.&quot;Name&quot; AS &quot;Artist.Name&quot;
+##        CTE2.&quot;AlbumId.ArtistId&quot; AS &quot;AlbumId.ArtistId&quot;,
+##        CTE2.&quot;AlbumId.Title&quot; AS &quot;AlbumId.Title&quot;,
+##        CTE2.&quot;AlbumId.ArtistId.Name&quot; AS &quot;AlbumId.ArtistId.Name&quot;,
+##        Genre.&quot;Name&quot; AS &quot;GenreId.Name&quot;,
+##        MediaType.&quot;Name&quot; AS &quot;MediaTypeId.Name&quot;
 ## 
 ##   FROM chinook_duckdb.main.Track AS Track
 ## 
-##   LEFT OUTER JOIN chinook_duckdb.main.Album AS Album
-##     ON Track.AlbumId = Album.AlbumId
+##   LEFT OUTER JOIN CTE2 AS CTE2
+##     ON Track.AlbumId = CTE2.&quot;AlbumId.AlbumId&quot;
 ## 
 ##   LEFT OUTER JOIN chinook_duckdb.main.Genre AS Genre
 ##     ON Track.GenreId = Genre.GenreId
@@ -652,25 +722,24 @@ has a foreign key that references <code>Artist</code>.</p>
 ##   LEFT OUTER JOIN chinook_duckdb.main.MediaType AS MediaType
 ##     ON Track.MediaTypeId = MediaType.MediaTypeId
 ## 
-##   LEFT OUTER JOIN chinook_duckdb.main.Artist AS Artist
-##     ON Album.ArtistId = Artist.ArtistId
-## 
 ##  LIMIT 10000</code></pre>
+</div>
 </div>
 <div id="load-a-database-catalog" class="section level2" number="2.4">
 <h2><span class="header-section-number">2.4</span> Load a Database
 Catalog</h2>
 <p>As a best practice for programatic use, it is better to load the
 catalog in order to avoid modifying the search path.</p>
-<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a>catalog <span class="ot">&lt;-</span> <span class="fu">dbi.catalog</span>(chinook)</span></code></pre></div>
+<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a>catalog <span class="ot">&lt;-</span> <span class="fu">dbi.catalog</span>(chinook)</span></code></pre></div>
 <p>Printing the catalog lists its schemas.</p>
-<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" tabindex="-1"></a>catalog</span></code></pre></div>
-<pre><code>## &lt;Database Catalog&gt; duckdb::chinook_duckdb (2 schemas containing 15 objects) 
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" tabindex="-1"></a>catalog</span></code></pre></div>
+<pre><code>## &lt;Database Catalog&gt; duckdb::chinook_duckdb (2 schemas containing 19 objects) 
 ## [1] &quot;information_schema&quot; &quot;main&quot;</code></pre>
 <p>Individual tables can be accessed using
 <code>catalog$schema$table</code> syntax.</p>
-<div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" tabindex="-1"></a>catalog<span class="sc">$</span>main<span class="sc">$</span>Album</span></code></pre></div>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" tabindex="-1"></a>catalog<span class="sc">$</span>main<span class="sc">$</span>Album</span></code></pre></div>
 <pre><code>## &lt;chinook_duckdb&gt; Album 
+## Key (non-strict): &lt;AlbumId&gt;
 ##  AlbumId                                 Title ArtistId
 ##    &lt;int&gt;                                &lt;char&gt;    &lt;int&gt;
 ##        1 For Those About To Rock We Salute You        1
@@ -678,18 +747,6 @@ catalog in order to avoid modifying the search path.</p>
 ##        3                     Restless and Wild        2
 ##        4                     Let There Be Rock        1
 ##        5                              Big Ones        3
-##  ---</code></pre>
-<p>When a catalog is loaded, all of its tables have access to the
-relational data in the information schema.</p>
-<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a><span class="fu">merge</span>(catalog<span class="sc">$</span>main<span class="sc">$</span>Album)</span></code></pre></div>
-<pre><code>## &lt;chinook_duckdb&gt; Album + Artist 
-##  ArtistId AlbumId                                 Title Artist.Name
-##     &lt;int&gt;   &lt;int&gt;                                &lt;char&gt;      &lt;char&gt;
-##         1       1 For Those About To Rock We Salute You       AC/DC
-##         2       2                     Balls to the Wall      Accept
-##         2       3                     Restless and Wild      Accept
-##         1       4                     Let There Be Rock       AC/DC
-##         3       5                              Big Ones   Aerosmith
 ##  ---</code></pre>
 </div>
 </div>
@@ -700,8 +757,8 @@ relational data in the information schema.</p>
 <p>Suppose that <code>x</code> is a <code>dbi.table</code> and that
 <code>e</code> is an expression involving <code>x</code> that returns
 either a <code>dbi.table</code> or a <code>data.table</code>.</p>
-<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">dbi.table</span>(chinook, DBI<span class="sc">::</span><span class="fu">Id</span>(<span class="st">&quot;Album&quot;</span>))</span>
-<span id="cb41-2"><a href="#cb41-2" tabindex="-1"></a>e <span class="ot">&lt;-</span> <span class="fu">quote</span>(x[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)])</span></code></pre></div>
+<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">dbi.table</span>(chinook, DBI<span class="sc">::</span><span class="fu">Id</span>(<span class="st">&quot;Album&quot;</span>))</span>
+<span id="cb45-2"><a href="#cb45-2" tabindex="-1"></a>e <span class="ot">&lt;-</span> <span class="fu">quote</span>(x[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)])</span></code></pre></div>
 <p>Since <code>dbi.table</code>’s syntax is a subset of
 <code>data.table</code>’s syntax, if <code>e</code> can be evaluated
 successfully (i.e., <code>eval(e)</code> does not throw an error), then
@@ -718,20 +775,20 @@ the final <code>data.table</code> result:</p>
 the <em>correct</em> answer: the <em>reference result set</em>. The
 design goal of <code>dbi.table</code> is to get the same result set as
 the reference result set, up to row order.</p>
-<div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" tabindex="-1"></a>result_set <span class="ot">&lt;-</span> <span class="fu">as.data.table</span>(<span class="fu">eval</span>(e))</span>
-<span id="cb42-2"><a href="#cb42-2" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">as.data.table</span>(x)</span>
-<span id="cb42-3"><a href="#cb42-3" tabindex="-1"></a>reference_result_set <span class="ot">&lt;-</span> <span class="fu">eval</span>(e)</span>
-<span id="cb42-4"><a href="#cb42-4" tabindex="-1"></a><span class="fu">all.equal</span>(reference_result_set, result_set, <span class="at">ignore.row.order =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb46"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" tabindex="-1"></a>result_set <span class="ot">&lt;-</span> <span class="fu">as.data.table</span>(<span class="fu">eval</span>(e))</span>
+<span id="cb46-2"><a href="#cb46-2" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">as.data.table</span>(x)</span>
+<span id="cb46-3"><a href="#cb46-3" tabindex="-1"></a>reference_result_set <span class="ot">&lt;-</span> <span class="fu">eval</span>(e)</span>
+<span id="cb46-4"><a href="#cb46-4" tabindex="-1"></a><span class="fu">all.equal</span>(reference_result_set, result_set, <span class="at">ignore.row.order =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 <pre><code>## [1] TRUE</code></pre>
 <p>The <code>dbi.table</code> package includes the function
 <code>reference.test</code> that compares the result set to the
 reference result set in the more general case where <code>expr</code>
 (the function’s first argument) is an expression involving 1 or more
 <code>dbi.table</code>s.</p>
-<div class="sourceCode" id="cb44"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">dbi.table</span>(chinook, DBI<span class="sc">::</span><span class="fu">Id</span>(<span class="st">&quot;Album&quot;</span>))</span>
-<span id="cb44-2"><a href="#cb44-2" tabindex="-1"></a><span class="fu">reference.test</span>({</span>
-<span id="cb44-3"><a href="#cb44-3" tabindex="-1"></a>  x[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)]</span>
-<span id="cb44-4"><a href="#cb44-4" tabindex="-1"></a>})</span></code></pre></div>
+<div class="sourceCode" id="cb48"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">dbi.table</span>(chinook, DBI<span class="sc">::</span><span class="fu">Id</span>(<span class="st">&quot;Album&quot;</span>))</span>
+<span id="cb48-2"><a href="#cb48-2" tabindex="-1"></a><span class="fu">reference.test</span>({</span>
+<span id="cb48-3"><a href="#cb48-3" tabindex="-1"></a>  x[, .(<span class="st">&quot;# of Albums&quot;</span> <span class="ot">=</span> .N), .(ArtistId)]</span>
+<span id="cb48-4"><a href="#cb48-4" tabindex="-1"></a>})</span></code></pre></div>
 <pre><code>## [1] TRUE</code></pre>
 <p>This function is used extensively in <code>dbi.table</code>’s
 unit/regression tests.</p>
@@ -741,20 +798,20 @@ unit/regression tests.</p>
 <p>We used the <code>chinook.duckdb</code> function to open a DBI
 connection at the beginning of this vignette and now it is up to us to
 close it.</p>
-<div class="sourceCode" id="cb46"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" tabindex="-1"></a>DBI<span class="sc">::</span><span class="fu">dbDisconnect</span>(chinook)</span></code></pre></div>
+<div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" tabindex="-1"></a>DBI<span class="sc">::</span><span class="fu">dbDisconnect</span>(chinook)</span></code></pre></div>
 <p>However, this leaves our R session in a wonky state. The environment
 “duckdb:chinook_duckdb” is still attached and there are several
 <code>dbi.table</code>s in the global environment - all of these
 <code>dbi.table</code>s are associated with an invalid DBI
 connection.</p>
-<div class="sourceCode" id="cb47"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" tabindex="-1"></a><span class="co">#A dbi.table in the duckdb:chinook_duckdb environment</span></span>
-<span id="cb47-2"><a href="#cb47-2" tabindex="-1"></a>Genre</span></code></pre></div>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" tabindex="-1"></a><span class="co">#A dbi.table in the duckdb:chinook_duckdb environment</span></span>
+<span id="cb51-2"><a href="#cb51-2" tabindex="-1"></a>Genre</span></code></pre></div>
 <pre><code>## Error in `dbSendQuery()`:
 ## ! rapi_prepare: Invalid connection</code></pre>
 <p>The R objects associated with our now-closed DBI connection need to
 be cleaned up manually (or you could just restart R).</p>
-<div class="sourceCode" id="cb49"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" tabindex="-1"></a><span class="fu">detach</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span>
-<span id="cb49-2"><a href="#cb49-2" tabindex="-1"></a><span class="fu">rm</span>(catalog, my_album, x)</span></code></pre></div>
+<div class="sourceCode" id="cb53"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" tabindex="-1"></a><span class="fu">detach</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span>
+<span id="cb53-2"><a href="#cb53-2" tabindex="-1"></a><span class="fu">rm</span>(catalog, my_album, x)</span></code></pre></div>
 <div id="connection-management" class="section level2" number="4.1">
 <h2><span class="header-section-number">4.1</span> Connection
 Management</h2>
@@ -765,11 +822,11 @@ function that returns an open DBI connection. When
 that connection belongs to <code>dbi.table</code> and
 <code>dbi.table</code> will take care of closing it when it is no longer
 needed.</p>
-<div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" tabindex="-1"></a><span class="fu">dbi.attach</span>(chinook.duckdb)</span></code></pre></div>
+<div class="sourceCode" id="cb54"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" tabindex="-1"></a><span class="fu">dbi.attach</span>(chinook.duckdb)</span></code></pre></div>
 <p>When <code>dbi.table</code> is managing the connection, then all the
 user has to do is detach (or delete if a catalog). The DBI connection
 will be closed when the object is garbage collected.</p>
-<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" tabindex="-1"></a><span class="fu">detach</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb55"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" tabindex="-1"></a><span class="fu">detach</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span></code></pre></div>
 <p>Further, when <code>dbi.table</code> owns the connection, it is able
 to reconnect in the event that the connection unexpectedly drops.</p>
 </div>

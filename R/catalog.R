@@ -8,8 +8,8 @@
 #'
 #' @param schemas
 #'   a character vector of distinct schema names. These schemas will be loaded
-#'   into the \code{dbi.catalog}. The default \code{schemas = NULL} loads all
-#'   schemas in the catalog.
+#'   into the \code{dbi.catalog}. By default (when \code{schemas} is missing),
+#'   \code{dbi.catalog} loads all available schemas.
 #'
 #' @return
 #'   a \code{dbi.catalog}.
@@ -25,9 +25,14 @@
 #' ls(db$main)
 #'
 #' @export
-dbi.catalog <- function(conn, schemas = NULL) {
+dbi.catalog <- function(conn, schemas) {
   conn <- init_connection(conn)
 
+  if (missing(schemas)) {
+    schemas <- NA
+  }
+
+  schemas <- as.character(schemas)
   catalog <- new.env(parent = emptyenv())
   assign("./dbi_connection", conn, catalog)
 
@@ -36,82 +41,55 @@ dbi.catalog <- function(conn, schemas = NULL) {
   }
 
   class(catalog) <- "dbi.catalog"
+  tables_schema <- tables_schema(catalog)
 
-  if (is.null(columns <- get_init_columns(catalog))) {
-    info <- bare_bones_information_schema(catalog)
-    columns <- as.data.frame(info$columns)
+  if (is.na(schemas)) {
+    schemas <- unique(tables_schema$table_schema)
   } else {
-    info <- information_schema(catalog, columns)
+    if (length(not_found <- setdiff(schemas, tables_schema$table_schema))) {
+      stop("schemas not found on connection: ",
+           paste(not_found, collapse = ", "))
+    }
+
+    schemas <- union(schemas, schemas_to_include(conn))
   }
 
-  if (is.null(columns$table_schema)) {
-    schema_names <- columns$table_schema <- "main"
-  } else {
-    schema_names <- setdiff(unique(columns$table_schema), "information_schema")
-  }
-
-  if (is.null(schemas)) {
-    schemas <- schema_names
-  } else {
-    schemas <- intersect(as.character(schemas), schema_names)
-  }
+  tables_schema <- tables_schema[tables_schema$table_schema %in% schemas, ]
+  row.names(tables_schema) <- NULL
 
   names(schemas) <- schemas
   schemas <- lapply(schemas, new_schema, catalog = catalog)
+  schemas <- schemas[tables_schema$table_schema]
 
-  install_from_columns(columns, schemas, catalog)
+  table_name <- tables_schema[, "table_name"]
+  table_id <- tables_schema$id
+
+  assign("./tables_schema", tables_schema[, c("id", "fields", "key")],
+         pos = catalog)
+
+  mapply(install_active_dbi_table,
+         schema = schemas,
+         name = table_name,
+         id = table_id,
+         MoreArgs = list(catalog = catalog),
+         SIMPLIFY = FALSE,
+         USE.NAMES = FALSE)
 
   catalog
 }
 
 
 
-install_from_columns <- function(columns, schemas, catalog, to_lower = FALSE) {
-  schema_names <- names(schemas)
-  id_cols <- intersect(c("table_catalog", "table_schema", "table_name"),
-                       names(columns))
-
-  columns <- subset(columns,
-                    subset = table_schema %in% schema_names,
-                    select = c(id_cols, c("column_name", "ordinal_position")))
-
-  tables <- split(columns, columns[, id_cols], drop = TRUE)
-
-  tables <- lapply(tables, function(u) {
-    id <- DBI::Id(unlist(u[1L, id_cols]))
-    fields <- u$column_name[order(u$ordinal_position)]
-
-    if (to_lower) {
-      table_schema <- tolower(u$table_schema[[1L]])
-      table_name <- tolower(u$table_name[[1L]])
-      column_names <- tolower(fields)
-    } else {
-      table_schema <- u$table_schema[[1L]]
-      table_name <- u$table_name[[1L]]
-      column_names <- fields
-    }
-
-    schema <- schemas[[table_schema]]
-
-    install_in_schema(table_name, catalog, id, fields, column_names, schema)
-  })
-
-  invisible()
-}
-
-
-
 dbi.catalog_disconnect <- function(e) {
   on.exit(rm(list = "./dbi_connection", envir = e))
-  try(DBI::dbDisconnect(dbi_connection(e)), silent = TRUE)
+  stry(DBI::dbDisconnect(dbi_connection(e)))
 }
 
 
 
 #' @export
 print.dbi.catalog <- function(x, ...) {
-  conn <- dbi_connection(x)
-  name <- paste(dbi_connection_package(conn), db_short_name(conn), sep = "::")
+  name <- paste(dbi_connection_package(x), db_short_name(x), sep = "::")
   desc <- paste(length(lsx <- ls(x)), "schemas containing",
                 sum(as.integer(eapply(x, function(u) length(ls(u))))),
                 "objects")
@@ -183,4 +161,17 @@ print.dbi.schema <- function(x, ...) {
   }
 
   invisible(x)
+}
+
+
+
+schemas_to_include <- function(conn) {
+  UseMethod("schemas_to_include")
+}
+
+
+
+#' @rawNamespace S3method(schemas_to_include,default,schemas_to_include_default)
+schemas_to_include_default <- function(conn) {
+  character(0)
 }

@@ -1,50 +1,30 @@
 db_short_name <- function(conn) {
-  conn <- dbi_connection(conn)
+  UseMethod("db_short_name")
+}
 
-  info <- DBI::dbGetInfo(conn)
-  if (nchar(dbname <- info$dbname)) {
-    short_name <- sub("([^.]+)\\.[[:alnum:]]+$", "\\1", basename(dbname))
-  } else if (nchar(host <- info$host)) {
-    short_name <- host
+
+
+#' @rawNamespace S3method(db_short_name,default,db_short_name_default)
+db_short_name_default <- function(conn) {
+  if (nchar(dbname <- DBI::dbGetInfo(conn)$dbname)) {
+    sub("([^.]+)\\.[[:alnum:]]+$", "\\1", basename(dbname))
   } else {
-    short_name <- "default_catalog"
+    "default_database"
   }
-
-  short_name
 }
 
 
 
 dbi_connection_package <- function(conn) {
-  conn <- dbi_connection(conn)
-  if (!is.null(pkg <- attr(class(conn), "package", exact = TRUE))) {
-    pkg
-  } else {
-    "DBI"
-  }
+  UseMethod("dbi_connection_package")
 }
 
 
 
-check_id <- function(id) {
-  if ((n <- length(id@name)) > 3L) {
-    stop("'id' has more than 3 components", call. = FALSE)
-  }
-
-  valid_names <- c("table_name", "table_schema", "table_catalog")[seq_len(n)]
-  valid_names <- rev(valid_names)
-
-  if (is.null(id_names <- names(id@name))) {
-    names(id@name) <- valid_names
-  } else {
-    for (i in which(id_names != valid_names)) {
-      warning("renaming 'id' component: '", id_names[i],
-              "'; new name: '", valid_names[i], "'")
-    }
-    names(id@name) <- valid_names
-  }
-
-  id
+#' @rawNamespace S3method(dbi_connection_package,default,dbi_connection_package_default)
+dbi_connection_package_default <- function(conn) {
+  pkg <- attr(class(dbi_connection(conn)), "package", exact = TRUE)
+  if (is.null(pkg)) "DBI" else pkg
 }
 
 
@@ -66,12 +46,17 @@ paren <- function(x) {
 #'   a single integer value. When nonnegative, limits the number of rows
 #'   returned by the query to \code{n}.
 #'
+#' @param strict
+#'   a logical value. If \code{TRUE} and \code{x} has a key, the key is
+#'   appended to the ORDER BY clause.
+#'
 #' @return
 #'   none (invisible \code{NULL}).
 #'
 #' @export
-csql <- function(x, n = getOption("dbi_table_max_fetch", 10000L)) {
-  cat(paste0(write_select_query(x, n), "\n"))
+csql <- function(x, n = getOption("dbitable.max.fetch", 10000L),
+                 strict = FALSE) {
+  cat(paste0(write_select_query(x, n, isTRUE(strict)), "\n"))
 }
 
 
@@ -123,29 +108,53 @@ find_environment <- function(x, mode = "any", class = NULL,
 assign_and_lock <- function(x, value, pos) {
   assign(x, value, pos)
   lockBinding(x, pos)
-  return(TRUE)
 }
 
 
 
-make_install_function <- function(catalog, id, fields, column_names) {
+get_table_schema_from_id <- function(catalog, id) {
+  cts <- catalog[["./tables_schema"]]
+  i <- match(list(id), cts$id)
+  cts <- cts[i, ]
+
+  if (!length(fields <- cts[[1L, "fields"]])) {
+    fields <- DBI::dbListFields(catalog, id)
+    catalog[["./tables_schema"]][[i, "fields"]] <- fields
+  }
+
+  list(catalog = catalog,
+       id = id,
+       column_names = fields,
+       key = cts[[1L, "key"]])
+}
+
+
+
+new_dbi_table_from_id <- function(catalog, id) {
+  if (is.null(s <- get_table_schema_from_id(catalog, id))) {
+    return(NULL)
+  }
+
+  new_dbi_table(catalog, id, copy_vector(s$column_names), copy_vector(s$key))
+}
+
+
+
+new_active_dbi_table <- function(catalog, id) {
   function(x) {
     if (missing(x)) {
-      dbi_table <- new_dbi_table(catalog, id, fields)
-      names(dbi_table) <- copy_vector(column_names)
-      return(dbi_table)
+      return(new_dbi_table_from_id(catalog, id))
     }
 
-    stop("'dbi.table' cannot be modified", call. = FALSE)
+    stop("this dbi.table cannot be modified", call. = FALSE)
   }
 }
 
 
 
-install_in_schema <- function(x, catalog, id, fields, column_names, schema) {
-  FUN <- make_install_function(catalog, id, fields, column_names)
-  makeActiveBinding(x, FUN, schema)
-  lockBinding(x, schema)
+install_active_dbi_table <- function(catalog, schema, name, id) {
+  fn <- new_active_dbi_table(catalog, id)
+  makeActiveBinding(name, fn, schema)
 }
 
 

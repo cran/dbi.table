@@ -5,23 +5,43 @@
 #' @title Merge two dbi.tables
 #'
 #' @description
-#'   Merge two \code{\link{dbi.table}}s. The \code{dbi.table} method is similar
-#'   to the \code{\link[data.table]{data.table}} method except that the result
-#'   set is only determined up to row order and is not sorted by default.
+#'   Merge two \code{\link{dbi.table}}s. By default, the columns to merge on are
+#'   determined by the first of the following cases to apply.
 #'
-#'   Default merge columns: if \code{x} has a foreign key constraint that
-#'   references \code{y} then the columns comprising this key are used; see
-#'   details. When a foreign key cannot be found, then the common columns
-#'   between the two \code{dbi.tables}s are used.
+#'   \enumerate{
+#'     \item If \code{x} and \code{y} are each unmodified \code{dbi.table}s in
+#'           the same \code{dbi.catalog} and if there is a single foreign key
+#'           relating \code{x} and \code{y} (either \code{x} referencing
+#'           \code{y}, or \code{y} referencing \code{x}), then it is used to set
+#'           \code{by.x} and \code{by.y}.
+#'
+#'     \item If \code{x} and \code{y} have shared key columns, then they are
+#'           used to set \code{by} (that is,
+#'           \code{by = intersect(key(x), key(y))} when
+#'           \code{intersect(key(x), key(y))} has length greater than zero).
+#'
+#'     \item If \code{x} has a key, then it is used to set \code{by} (that is,
+#'           \code{by = key(x)} when \code{key(x)} has length greater than
+#'           zero).
+#'
+#'     \item If \code{x} and \code{y} have columns in common, then they are used
+#'           to set
+#'           \code{by} (that is, \code{by = intersect(names(x), names(y))} when
+#'           \code{intersect(names(x), names(y))} has length greater than zero).
+#'   }
 #'
 #'   Use the \code{by}, \code{by.x}, and \code{by.y} arguments explicitly to
 #'   override this default.
 #'
 #' @param x,y
-#'   \code{\link{dbi.table}}s sharing the same DBI connection.
+#'   \code{\link{dbi.table}}s sharing the same DBI connection. If \code{y} is
+#'   not a \code{dbi.table} but does inherit from \code{data.frame}, then it is
+#'   coerced to a \code{dbi.table} using \code{\link{as.dbi.table}}. If \code{y}
+#'   is missing, a merge is performed for each of \code{x}'s foreign keys.
 #'
 #' @param by
-#'   A vector of shared column names in \code{x} and \code{y} to merge on.
+#'   a character vector of shared column names in \code{x} and \code{y} to merge
+#'   on.
 #'
 #' @param by.x,by.y
 #'   character vectors of column names in \code{x} and \code{y} to merge on.
@@ -41,7 +61,8 @@
 #'   a logical value. Analogous to \code{all.x} above.
 #'
 #' @param sort
-#'   a logical value. Currently ignored.
+#'   a logical value. When TRUE (default), the key of the merged
+#'   \code{dbi.table} is set to the \code{by} / \code{by.x} columns.
 #'
 #' @param suffixes
 #'   a length-2 character vector. The suffixes to be used for making
@@ -49,29 +70,29 @@
 #'   fashion to the \code{\link[base]{merge.data.frame}} method.
 #'
 #' @param no.dups
-#'  a logical value. When \code{TRUE}, suffixes are also appended to
-#'  non-\code{by.y} column names in \code{y} when they have the same column
-#'  name as any \code{by.x}.
+#'   a logical value. When \code{TRUE}, suffixes are also appended to
+#'   non-\code{by.y} column names in \code{y} when they have the same column
+#'   name as any \code{by.x}.
 #'
 #' @param recursive
 #'   a logical value. Only used when \code{y} is missing. When \code{TRUE},
-#'   \code{merge} is called recursively on each of the just-merged
-#'   \code{dbi.table}s. See examples.
+#'   \code{merge} is called on each \code{dbi.table} prior to merging with
+#'   \code{x}. See examples.
 #'
 #' @param \dots
-#'   additional arguments are ignored.
+#'   additional arguments are passed to \code{\link{as.dbi.table}}.
 #'
 #' @return
 #'   a \code{\link{dbi.table}}.
 #'
 #' @details
-#'   Foreign key constraints. Foreign keys can only be queried when (1) the
-#'   \code{dbi.table}'s schema is loaded, and (2) \code{dbi.table} understands
-#'   the underlying database's information schema.
-#'
 #'   \code{merge.dbi.table} uses \code{\link{sql.join}} to join \code{x} and
 #'   \code{y} then formats the result set to match the typical \code{merge}
 #'   output.
+#'
+#' @seealso
+#'   \code{\link[data.table]{merge.data.table}},
+#'   \code{\link[base]{merge.data.frame}}
 #'
 #' @examples
 #'   chinook <- dbi.catalog(chinook.duckdb)
@@ -82,28 +103,24 @@
 #'   #When y is omitted, x's foreign key relationship is used to determine y
 #'   merge(chinook$main$Album)
 #'
-#'   #Multiple foreign keys are supported
-#'   csql(merge(chinook$main$Track))
+#'   #Track has 3 foreign keys: merge with Album, Genre, and MediaType
+#'   merge(chinook$main$Track)
 #'
 #'   #Track references Album but not Artist, Album references Artist
-#'   #This dbi.table includes Artist.Name as well
-#'   csql(merge(chinook$main$Track, recursive = TRUE))
+#'   #This dbi.table includes the artist name
+#'   merge(chinook$main$Track, recursive = TRUE)
 #'
 #' @export
 merge.dbi.table <- function(x, y, by = NULL, by.x = NULL, by.y = NULL,
                             all = FALSE, all.x = all, all.y = all,
-                            sort = FALSE, suffixes = c(".x", ".y"),
+                            sort = TRUE, suffixes = c(".x", ".y"),
                             no.dups = TRUE, recursive = FALSE, ...) {
-  if (!is.dbi.table(x)) {
-    stop("'x' is not a 'dbi.table'")
-  }
-
   if (missing(y) || is.null(y)) {
     return(relational_merge(x, recursive))
   }
 
   if (!is.dbi.table(y)) {
-    stop("'y' is not a 'dbi.table'")
+    y <- as.dbi.table(y, ...)
   }
 
   dots <- list(...)
@@ -116,27 +133,48 @@ merge.dbi.table <- function(x, y, by = NULL, by.x = NULL, by.y = NULL,
     warning("non-NULL value of 'incomparables' was ignored")
   }
 
-  names_x <- names(x)
-  names_y <- names(y)
+  x_names <- names(x)
+  y_names <- names(y)
 
-  if (anyDuplicated(names_x) || anyDuplicated(names_y)) {
+  if (anyDuplicated(x_names) || anyDuplicated(y_names)) {
     stop("the 'merge' method for 'dbi.table' requires that 'x' and 'y' ",
          "each have unique column names")
   }
 
   if (is.null(by) && is.null(by.x) && is.null(by.y)) {
-    if (is.null(rt <- related_tables(x, y)) || nrow(rt) < 1L) {
-      by.x <- by.y <- intersect(names_x, names_y)
-    } else {
-      rt_x <- rt[, c("catalog_x", "schema_x", "table_x", "field_x")]
-      by_x <- match_by_field(x, rt_x)
-      rt_y <- rt[, c("catalog_y", "schema_y", "table_y", "field_y")]
-      by_y <- match_by_field(y, rt_y)
 
-      if (!anyNA(by_x) && !anyNA(by_y)) {
-        by.x <- by_x
-        by.y <- by_y
+    if (is_pristine(x) && is_pristine(y)) {
+      if (length(rt <- related_tables(x, y))) {
+        if (nrow(rt) == 1L) {
+          by.x <- rt[[1L, "x_columns"]]
+          by.y <- rt[[1L, "y_columns"]]
+        }
       }
+    }
+
+    if (is.null(by.x) && is.null(by.y)) {
+      by <- intersect(x_key <- get_key(x), get_key(y))
+
+      if (!length(by)) {
+        by <- x_key
+      }
+
+      if (!length(by)) {
+        by <- intersect(x_names, y_names)
+      }
+
+      if (length(by) < 1L || !is.character(by)) {
+        stop("a non-empty vector of column names for 'by' is required")
+      }
+
+      if (!all(by %in% x_names)) {
+        stop("at least one column listed in 'by' is not present in 'x'")
+      }
+      if (!all(by %in% y_names)) {
+        stop("at least one column listed in 'by' is not present in 'y'")
+      }
+
+      by <- unname(by)
     }
   }
 
@@ -151,17 +189,17 @@ merge.dbi.table <- function(x, y, by = NULL, by.x = NULL, by.y = NULL,
       stop("non-empty character vectors of column names are required for ",
            "'by.x' and 'by.y'")
 
-    if (!all(by.x %in% names_x))
+    if (!all(by.x %in% x_names))
       stop("Elements listed in 'by.x' must be valid column names in 'x'")
 
-    if (!all(by.y %in% names_y))
+    if (!all(by.y %in% y_names))
       stop("Elements listed in 'by.y' must be valid column names in 'y'")
   } else {
     if (!length(by)) {
       stop("a non-empty character vector of column names is required for 'by'")
     }
 
-    if (!all(by %in% intersect(names_x, names_y)))
+    if (!all(by %in% intersect(x_names, y_names)))
       stop("Elements listed in 'by' must be valid column names in 'x' and 'y'")
 
     by <- unname(by)
@@ -185,49 +223,30 @@ merge.dbi.table <- function(x, y, by = NULL, by.x = NULL, by.y = NULL,
 
   xy <- sql_join(x, y, type, on, c("x.", "y."), NULL)
 
-  x <- c(xy)[seq_along(x)]
-  names(x) <- names_x
-  y <- c(xy)[-seq_along(x)]
-  names(y) <- names_y
+  xy_x <- names_list(names(xy)[seq_along(x)], x_names)
+  xy_y <- names_list(names(xy)[-seq_along(x)], y_names)
 
-  start <- setdiff(names_x, by.x)
-  end <- setdiff(names_y, by.y)
-
-  non_by <- c(x[start], y[end])
-
-  by_x <- list_of_by_columns(by.x, x)
-  keep <- !vapply(by_x, is.null, FALSE)
-  by_x <- by_x[keep]
+  start <- setdiff(x_names, by.x)
+  end <- setdiff(y_names, by.y)
 
   if (type %in% c("inner", "left")) {
-    by <- by_x
-  } else {
-    by_y <- list_of_by_columns(by.y, y)
-    names(by_y) <- by.x
-    by_y <- by_y[keep]
-
-    if (type == "right") {
-      by <- by_y
-
-    } else if (type == "outer") {
-      by <- mapply(function(u, v) {
-        if (!is.null(u) && !is.null(v))
-          return(call("coalesce", u, v))
-        if (!is.null(u))
-          return(u)
-        NULL
-      }, u = by_x, v = by_y, SIMPLIFY = FALSE)
-    } else { #for cross joins
-      by <- list()
-    }
+    by <- xy_x[by.x]
+  } else if (type == "right") {
+    by <- xy_y[by.y]
+    names(by) <- by.x
+  } else if (type == "outer") {
+    by <- mapply(function(u, v) {
+      if (!is.null(u) && !is.null(v))
+        return(call("coalesce", u, v))
+      if (!is.null(u))
+        return(u)
+      NULL
+    }, u = xy_x[by.x], v = xy_y[by.y], SIMPLIFY = FALSE)
+  } else { #for cross joins
+    by <- list()
   }
 
-  j <- c(by, non_by)
-  names_j <- names(j)
-  a <- attributes(xy)
-  a$names <- NULL
-  attributes(j) <- a
-  names(j) <- names_j
+  xy <- handle_j(xy, c(by, xy_x[start], xy_y[end]), NULL, NULL)
 
   # naming logical taken from merge.data.table (data.table version 1.14.10)
   by_names <- names(by)
@@ -242,13 +261,33 @@ merge.dbi.table <- function(x, y, by = NULL, by.x = NULL, by.y = NULL,
     end[match(dupkeyx, end, 0L)] <- paste0(dupkeyx, suffixes[2L])
   }
 
-  names(j) <- c(by_names, start, end)
-  j
+  names(xy) <- c(by_names, start, end)
+
+  if (isTRUE(sort)) {
+    attr(xy, "sorted") <- by_names
+  }
+
+  xy
 }
 
 
 
 merge_i_dbi_table <- function(x, i, not_i, j, by, nomatch, on, enclos) {
+  x_key <- get_key(x)
+
+  if (is.null(on)) {
+    if (length(x_key)) {
+      if (is.null(i_key <- get_key(i))) {
+        i_key <- names(i)
+      }
+
+      idx <- seq_len(min(length(x_key), length(i_key)))
+      on <- paste(x_key[idx], i_key[idx], sep = " == ")
+    } else {
+      stop("when 'on' is NULL, 'x' must be keyed", call. = FALSE)
+    }
+  }
+
   names(x) <- paste0("x.", x_names <- names(x))
   names(i) <- paste0("i.", i_names <- names(i))
 
@@ -288,8 +327,15 @@ merge_i_dbi_table <- function(x, i, not_i, j, by, nomatch, on, enclos) {
   on_x <- as.character(lapply(on, `[[`, 2L))
   on_i <- as.character(lapply(on, `[[`, 3L))
 
-  on <- lapply(on, function(u) {u[[2L]] <- as.name(paste0("x.", u[[2L]])); u})
-  on <- lapply(on, function(u) {u[[3L]] <- as.name(paste0("i.", u[[3L]])); u})
+  on <- lapply(on, function(u) {
+    u[[2L]] <- as.name(paste0("x.", u[[2L]]))
+    u
+  })
+
+  on <- lapply(on, function(u) {
+    u[[3L]] <- as.name(paste0("i.", u[[3L]]))
+    u
+  })
 
   on <- handy_andy(on)
 
@@ -329,6 +375,7 @@ merge_i_dbi_table <- function(x, i, not_i, j, by, nomatch, on, enclos) {
     xi <- handle_j(xi, j, by = NULL)
   }
 
+  attr(xi, "sorted") <- x_key
   xi
 }
 
@@ -369,10 +416,8 @@ extract_on_validator <- function(expr, x_names, i_names) {
 
 
 
-list_of_by_columns <- function(nm, x) {
-  ret <- vector("list", length(nm))
-  names(ret) <- nm
-  idx <- intersect(nm, names(x))
-  ret[idx] <- x[idx]
-  ret
+is_pristine <- function(x) {
+  f <- get_fields(x)
+  nn <- names_list(f$internal_name, f$field)
+  nrow(get_data_source(x)) == 1L && setequal(c(x), nn)
 }
