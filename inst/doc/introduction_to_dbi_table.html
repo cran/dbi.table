@@ -807,7 +807,8 @@ connection.</p>
 <div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" tabindex="-1"></a><span class="co">#A dbi.table in the duckdb:chinook_duckdb environment</span></span>
 <span id="cb51-2"><a href="#cb51-2" tabindex="-1"></a>Genre</span></code></pre></div>
 <pre><code>## Error in `dbSendQuery()`:
-## ! rapi_prepare: Invalid connection</code></pre>
+## ! Invalid connection
+## ℹ Context: rapi_prepare</code></pre>
 <p>The R objects associated with our now-closed DBI connection need to
 be cleaned up manually (or you could just restart R).</p>
 <div class="sourceCode" id="cb53"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" tabindex="-1"></a><span class="fu">detach</span>(<span class="st">&quot;duckdb:chinook_duckdb&quot;</span>)</span>

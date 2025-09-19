@@ -1,7 +1,7 @@
 Package: dbi.table
 Type: Package
 Title: Database Queries Using 'data.table' Syntax
-Version: 1.0.4
+Version: 1.0.5
 Depends: R (>= 3.6.0)
 Imports: DBI, bit64, dbplyr, methods, rlang, stringi, utils
 Suggests: RMariaDB, RPostgres, RSQLite, data.table, duckdb, knitr,
@@ -26,11 +26,11 @@ Authors@R: c(
          comment = "Chinook Database - see example_files/LICENSE")
   )
 Config/testthat/edition: 3
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 NeedsCompilation: no
-Packaged: 2025-06-27 20:26:32 UTC; kjellk
+Packaged: 2025-09-19 22:47:34 UTC; kjellk
 Author: Kjell P. Konis [aut, cre],
   Luis Rocha [ctb] (Chinook Database - see example_files/LICENSE)
 Maintainer: Kjell P. Konis <kjellk@gmail.com>
 Repository: CRAN
-Date/Publication: 2025-06-28 18:20:02 UTC
+Date/Publication: 2025-09-19 23:10:03 UTC
