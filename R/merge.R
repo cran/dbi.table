@@ -299,28 +299,28 @@ merge_i_dbi_table <- function(x, i, not_i, j, by, nomatch, on, enclos) {
     stop("'nomatch' must be NA or NULL", call. = FALSE)
   }
 
-  if (is.character(on)) {
-    if (is.null(on_names <- names(on))) {
-      on_names <- on
-    }
-
-    on <- as.list(parse(text = on))
-    single_name <- vapply(on, is.name, FALSE)
-    no_name <- (nchar(on_names) == 0L)
-
-    on_names[single_name & no_name] <- as.character(on[single_name & no_name])
-
-    on[single_name] <- mapply(call,
-                              name = "==",
-                              #use names_list here?
-                              lapply(on_names[single_name], as.name),
-                              on[single_name],
-                              SIMPLIFY = FALSE,
-                              USE.NAMES = FALSE)
-
-  } else if (on %is_call_to% c(".", "list")) {
-    on <- as.list(on[-1])
+  if (on %is_call_to% c(".", "list")) {
+    on <- as.list(on[-1L])
   }
+
+  if (is.null(on_names <- names(on))) {
+    on_names <- character(length(on))
+  }
+
+  if (is.character(on)) {
+    on <- as.list(str2expression(on))
+  }
+
+  symbols <- vapply(on, is.symbol, FALSE)
+  needs_name <- (nchar(on_names) == 0L & symbols)
+  on_names[needs_name] <- as.character(on[needs_name])
+  
+  on[symbols] <- mapply(call,
+                        name = "==",
+                        lapply(on_names[symbols], as.symbol),
+                        on[symbols],
+                        SIMPLIFY = FALSE,
+                        USE.NAMES = FALSE)
 
   on <- lapply(on, extract_on_validator, x_names = x_names, i_names = i_names)
 
@@ -399,11 +399,11 @@ extract_on_validator <- function(expr, x_names, i_names) {
   if (expr %is_call_to% DT_SUPPORTED_JOIN_OPERATORS) {
     op <- as.character(expr[[1L]])
 
-    if (!(lhs <- as.character(expr[[2L]])) %in% x_names) {
+    if (!(lhs <- format(expr[[2L]])) %in% x_names) {
       stop("argument specifying columns received non-existing column: '",
            lhs, "'")
     }
-    if (!(rhs <- as.character(expr[[3L]])) %in% i_names) {
+    if (!(rhs <- format(expr[[3L]])) %in% i_names) {
       stop("argument specifying columns received non-existing column: '",
            rhs, "'")
     }
