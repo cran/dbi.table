@@ -113,24 +113,24 @@ sql_join <- function(x, y, type, on, prefixes, parent_frame) {
 
   xy_fields <- rbind(x_fields, y_fields)
   xy_fields$old <- xy_fields$internal_name
-  xy_fields$internal_name <- paste0(session$key_base, seq_len(nrow(xy_fields)))
+  xy_fields$internal_name <- paste0(KEY_BASE, seq_len(nrow(xy_fields)))
 
   y_sub <- xy_fields[xy_fields$src == prefixes[[2L]], ]
   y_sub <- names_list(y_sub$internal_name, y_sub$old)
-  new_y <- sub_lang(y, envir = y_sub)
+  new_y <- sub_lang(y, y_sub)
 
   xref <- make_xref(c(x), new_y, xy_fields, prefixes)
   xy <- c(c(x), new_y)
-  on <- sub_lang(on, envir = xref, specials = NULL, enclos = parent_frame)
+  on <- sub_lang(on, xref, enclos = parent_frame)
 
   # join where
 
-  y_where <- sub_lang(get_where(y), envir = y_sub)
+  y_where <- sub_lang(get_where(y), y_sub)
   xy_where <- c(get_where(x), y_where)
 
   # join order_by
 
-  y_order_by <- sub_lang(get_order_by(y), envir = y_sub, specials = NULL)
+  y_order_by <- sub_lang(get_order_by(y), y_sub)
   xy_order_by <- c(get_order_by(x), y_order_by)
 
   # 2. Join DBI connections (fail if not same connection)
@@ -190,14 +190,19 @@ JOIN_TYPES <- c(inner = "INNER JOIN",
 
 
 can_join_as_x <- function(x) {
-  dbi_table_is_simple(x)
+  !has_over(x) &&
+    !length(get_where(x)) &&
+    !length(get_group_by(x)) &&
+    !get_distinct(x)
 }
 
 
 
 can_join_as_y <- function(x) {
-  data_source <- get_data_source(x)
-  dbi_table_is_simple(x) && (nrow(data_source) == 1L)
+  !has_over(x) &&
+    !length(get_group_by(x)) &&
+    !get_distinct(x) &&
+    (nrow(get_data_source(x)) == 1L)
 }
 
 

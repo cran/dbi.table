@@ -167,7 +167,7 @@ new_dbi_table <- function(conn, id, fields = NULL, key = NULL,
     fields <- DBI::dbListFields(conn, id)
   }
 
-  internal_name <- paste0(session$key_base, seq_len(length(fields)))
+  internal_name <- paste0(KEY_BASE, seq_len(length(fields)))
 
   x <- names_list(internal_name, fields)
 
@@ -538,7 +538,7 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
   x_sub <- substitute(x)
   parent <- parent.frame()
 
-  if (!dbi_table_is_simple(x)) {
+  if (has_over(x) || length(get_group_by(x)) || get_distinct(x)) {
     x <- as_cte(x)
   }
 
@@ -547,7 +547,7 @@ as.data.frame.dbi.table <- function(x, row.names = NULL, optional = FALSE, ...,
   if (missing(i)) {
     i <- NULL
   } else {
-    i <- sub_lang(substitute(i), x, enclos = parent)
+    i <- sub_lang(substitute(i), x, get_specials(x), parent)
 
     if (is.data.frame(i)) {
       i <- as.dbi.table(x, i)
@@ -720,7 +720,7 @@ temporary_dbi_table <- function(conn, x, key = NULL) {
 
 
 temporary_dbi_table_default <- function(conn, x, key = NULL) {
-  temp_name <- unique_table_name(session$tmp_base)
+  temp_name <- unique_table_name(TMP_BASE)
   make_temp_dbi_table(conn, temp_name, x, key)
 }
 

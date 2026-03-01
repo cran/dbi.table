@@ -12,4 +12,32 @@ for (n in names(memory_connections)) {
 
     expect_no_error(table1[table2, on = .(name = name2)])
   })
+
+
+  test_that(paste0("dbi.table evaluates $, [[, and [", " [", n, "]"), {
+    x <- as.dbi.table(conn, data.frame(u = 1))
+    tmp <- list(v = 1)
+
+    expect_true(reference.test({
+      x[u == tmp$v]
+    }))
+
+    expect_true(reference.test({
+      x[u == tmp[["v"]]]
+    }))
+
+    expect_true(reference.test({
+      x[u == tmp["v"]]
+    }))
+  })
+
+
+  test_that(paste0("Issue #6: x[y] works when x has WHERE", " [", n, "]"), {
+    x <- as.dbi.table(conn, data.frame(i = 1:5, x = letters[1:5]))[i <= 1]
+    y <- as.dbi.table(conn, data.frame(i = 1:2))
+
+    expect_true(reference.test({
+      x[y, on = "i"]
+    }))
+  })
 }

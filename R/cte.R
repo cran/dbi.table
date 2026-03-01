@@ -5,7 +5,7 @@ as_cte <- function(x) {
     is_name <- vapply(x, is.name, FALSE)
     v <- lapply(names(x)[is_name], as.name)
     names(v) <- as.character(x[is_name])
-    order_by <- lapply(order_by, sub_lang, envir = v, specials = NULL)
+    order_by <- lapply(order_by, sub_lang, envir = v)
 
     tmp <- lapply(order_by, all.names)
     keep <- vapply(tmp, function(u, v) all(u %in% v), FALSE, v = names(x))
@@ -22,15 +22,14 @@ as_cte <- function(x) {
                             on = I(list(NULL)))
 
   field_names <- names(x)
-  fields <- data.frame(internal_name = paste0(session$key_base,
-                                              seq_along(field_names)),
+  fields <- data.frame(internal_name = paste0(KEY_BASE, seq_along(field_names)),
                        id_name = id_name,
                        field = field_names)
 
   v <- lapply(fields$internal_name, as.name)
   names(v) <- fields$field
 
-  order_by <- lapply(order_by, sub_lang, envir = v, specials = NULL)
+  order_by <- lapply(order_by, sub_lang, envir = v)
 
   ctes <- get_ctes(x)
   attr(x, "ctes") <- NULL
@@ -50,30 +49,6 @@ as_cte <- function(x) {
 
 
 
-dbi_table_is_simple <- function(x) {
-  if (!is.dbi.table(x)) {
-    return(FALSE)
-  }
-
-  has_over <- vapply(c(x),
-                     function(u) !is.null(attr(u, "over", exact = TRUE)),
-                     FALSE)
-  group_by <- get_group_by(x)
-  distinct <- attr(x, "distinct", exact = TRUE)
-
-  (length(group_by) == 0L) && !any(has_over) && !distinct
-}
-
-
-
-dbi.table_can_join_x <- function(x) {
-  if (is.dbi.table(x)) {
-    has_over <- lapply(x, attr, which = "over", exact = TRUE)
-    has_over <- !vapply(has_over, is.null, FALSE)
-
-    length(get_group_by(x)) == 0 &&
-      !any(has_over)
-  } else {
-    FALSE
-  }
+has_over <- function(x) {
+  any(vapply(c(x), function(u) !is.null(attr(u, "over", exact = TRUE)), FALSE))
 }
